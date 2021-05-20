@@ -121,6 +121,7 @@ void ocp_nlp_sqp_opts_initialize_default(void *config_, void *dims_, void *opts_
     opts->tol_eq   = 1e-8;
     opts->tol_ineq = 1e-8;
     opts->tol_comp = 1e-8;
+    opts->timeout = 1e6; // default: no timeout
 
     opts->ext_qp_res = 0;
 
@@ -225,6 +226,11 @@ void ocp_nlp_sqp_opts_set(void *config_, void *opts_, const char *field, void* v
             opts->tol_comp = *tol_comp;
             // TODO: set accuracy of the qp_solver to the minimum of current QP accuracy and the one specified.
             config->qp_solver->opts_set(config->qp_solver, opts->nlp_opts->qp_solver_opts, "tol_comp", value);
+        }
+        else if (!strcmp(field, "timeout"))
+        {
+            double* timeout = (double *) value;
+            opts->timeout = *timeout;
         }
         else if (!strcmp(field, "ext_qp_res"))
         {
@@ -488,6 +494,7 @@ int ocp_nlp_sqp(void *config_, void *dims_, void *nlp_in_, void *nlp_out_,
     // zero timers
     double total_time = 0.0;
     double tmp_time;
+    double time_till_now = 0.0;
     mem->time_qp_sol = 0.0;
     mem->time_qp_solver_call = 0.0;
     mem->time_qp_xcond = 0.0;
@@ -602,7 +609,7 @@ int ocp_nlp_sqp(void *config_, void *dims_, void *nlp_in_, void *nlp_out_,
     int sqp_iter = 0;
     nlp_mem->sqp_iter = &sqp_iter;
 
-    for (; sqp_iter < opts->max_iter; sqp_iter++)
+    for (; sqp_iter < opts->max_iter && time_till_now < opts->timeout; sqp_iter++)
     {
         // linearizate NLP and update QP matrices
         acados_tic(&timer1);
@@ -814,6 +821,7 @@ int ocp_nlp_sqp(void *config_, void *dims_, void *nlp_in_, void *nlp_out_,
                 nlp_mem->nlp_res->inf_norm_res_eq, nlp_mem->nlp_res->inf_norm_res_ineq, nlp_mem->nlp_res->inf_norm_res_comp );
         }
 
+        time_till_now = acados_toc(&timer0);
     }
 
 
