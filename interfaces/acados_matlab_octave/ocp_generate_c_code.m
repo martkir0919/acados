@@ -126,7 +126,6 @@ function ocp_generate_c_code(obj)
             cost.(this_prop) = num2cell(cost.(this_prop));
         end
     end
-    obj.acados_ocp_nlp_json.cost = cost;
 
     % for cost type not LINEAR_LS, fill matrices with zeros
     if ~strcmp(cost.cost_type, 'LINEAR_LS')
@@ -142,6 +141,7 @@ function ocp_generate_c_code(obj)
     if ~strcmp(cost.cost_type_e, 'LINEAR_LS')
         cost.Vx_e = zeros(dims.ny_e, dims.nx);
     end
+    obj.acados_ocp_nlp_json.cost = cost;
 
     %% load JSON layout
     acados_folder = getenv('ACADOS_INSTALL_DIR');
@@ -236,6 +236,7 @@ function ocp_generate_c_code(obj)
     opts.time_steps = reshape(num2cell(opts.time_steps), [1, dims.N]);
     opts.sim_method_num_stages = reshape(num2cell(opts.sim_method_num_stages), [1, dims.N]);
     opts.sim_method_num_steps = reshape(num2cell(opts.sim_method_num_steps), [1, dims.N]);
+    opts.sim_method_jac_reuse = reshape(num2cell(opts.sim_method_jac_reuse), [1, dims.N]);
     obj.acados_ocp_nlp_json.solver_options = opts;
 
     % parameter values

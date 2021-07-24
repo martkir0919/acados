@@ -468,6 +468,17 @@ def make_ocp_dims_consistent(acados_ocp):
     else:
         raise Exception("Wrong value for sim_method_num_stages. Should be either int or array of ints of shape (N,).")
 
+    # jac_reuse
+    if isinstance(opts.sim_method_jac_reuse, np.ndarray) and opts.sim_method_jac_reuse.size == 1:
+        opts.sim_method_jac_reuse = opts.sim_method_jac_reuse.item()
+
+    if isinstance(opts.sim_method_jac_reuse, (int, float)) and opts.sim_method_jac_reuse % 1 == 0:
+        opts.sim_method_jac_reuse = opts.sim_method_jac_reuse * np.ones((dims.N,), dtype=np.int64)
+    elif isinstance(opts.sim_method_jac_reuse, np.ndarray) and opts.sim_method_jac_reuse.size == dims.N \
+           and np.all(np.equal(np.mod(opts.sim_method_jac_reuse, 1), 0)):
+        opts.sim_method_jac_reuse = np.reshape(opts.sim_method_jac_reuse, (dims.N,)).astype(np.int64)
+    else:
+        raise Exception("Wrong value for sim_method_jac_reuse. Should be either int or array of ints of shape (N,).")
 
 
 
@@ -560,6 +571,8 @@ def ocp_generate_external_functions(acados_ocp, model):
         generate_c_code_explicit_ode(model, opts)
     elif acados_ocp.solver_options.integrator_type == 'IRK':
         # implicit model -- generate C code
+        generate_c_code_implicit_ode(model, opts)
+    elif acados_ocp.solver_options.integrator_type == 'LIFTED_IRK':
         generate_c_code_implicit_ode(model, opts)
     elif acados_ocp.solver_options.integrator_type == 'GNSF':
         generate_c_code_gnsf(model, opts)
@@ -744,6 +757,7 @@ class AcadosOcpSolver:
         :param acados_ocp: type AcadosOcp - description of the OCP for acados
         :param json_file: name for the json file used to render the templated code - default: acados_ocp_nlp.json
         :param simulink_opts: Options to configure Simulink S-function blocks, mainly to activate possible Inputs and Outputs
+        :param build: Option to disable rendering templates and compiling if previously built - default: True
     """
     if sys.platform=="win32":
         from ctypes import wintypes
@@ -753,7 +767,7 @@ class AcadosOcpSolver:
         dlclose = CDLL(None).dlclose
         dlclose.argtypes = [c_void_p]
 
-    def __init__(self, acados_ocp, json_file='acados_ocp_nlp.json', simulink_opts=None):
+    def __init__(self, acados_ocp, json_file='acados_ocp_nlp.json', simulink_opts=None, build=True):
 
         self.solver_created = False
         self.N = acados_ocp.dims.N
@@ -784,16 +798,17 @@ class AcadosOcpSolver:
         # dump to json
         ocp_formulation_json_dump(acados_ocp, simulink_opts, json_file)
 
-        # render templates
-        ocp_render_templates(acados_ocp, json_file)
+        if build:
+          # render templates
+          ocp_render_templates(acados_ocp, json_file)
 
-        ## Compile solver
-        code_export_dir = acados_ocp.code_export_directory
-        cwd=os.getcwd()
-        os.chdir(code_export_dir)
-        os.system('make clean_ocp_shared_lib')
-        os.system('make ocp_shared_lib')
-        os.chdir(cwd)
+          ## Compile solver
+          code_export_dir = acados_ocp.code_export_directory
+          cwd=os.getcwd()
+          os.chdir(code_export_dir)
+          os.system('make clean_ocp_shared_lib')
+          os.system('make ocp_shared_lib')
+          os.chdir(cwd)
 
         self.shared_lib_name = f'{code_export_dir}/libacados_ocp_solver_{model.name}.so'
 

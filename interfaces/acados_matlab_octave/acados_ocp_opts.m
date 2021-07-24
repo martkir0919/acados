@@ -55,6 +55,7 @@ classdef acados_ocp_opts < handle
             % set one of the following for nonuniform grid
             obj.opts_struct.shooting_nodes = [];
             obj.opts_struct.time_steps = [];
+            obj.opts_struct.parameter_values = [];
 
             obj.opts_struct.nlp_solver = 'sqp';
             obj.opts_struct.nlp_solver_exact_hessian = 'false';
@@ -84,6 +85,7 @@ classdef acados_ocp_opts < handle
             obj.opts_struct.sim_method_num_stages = 4;
             obj.opts_struct.sim_method_num_steps = 1;
             obj.opts_struct.sim_method_newton_iter = 3;
+            obj.opts_struct.sim_method_jac_reuse = 0;
             obj.opts_struct.gnsf_detect_struct = 'true';
             obj.opts_struct.regularize_method = 'no_regularize';
             obj.opts_struct.print_level = 0;
@@ -179,6 +181,8 @@ classdef acados_ocp_opts < handle
                 obj.opts_struct.sim_method_newton_iter = value;
             elseif (strcmp(field, 'sim_method_exact_z_output'))
                 obj.opts_struct.sim_method_exact_z_output = value;
+            elseif (strcmp(field, 'sim_method_jac_reuse'))
+                obj.opts_struct.sim_method_jac_reuse = value;
             elseif (strcmp(field, 'gnsf_detect_struct'))
                 obj.opts_struct.gnsf_detect_struct = value;
             elseif (strcmp(field, 'regularize_method'))
@@ -195,6 +199,8 @@ classdef acados_ocp_opts < handle
                 obj.opts_struct.alpha_reduction = value;
             elseif (strcmp(field, 'globalization'))
                 obj.opts_struct.globalization = value;
+            elseif (strcmp(field, 'parameter_values'))
+                obj.opts_struct.parameter_values = value;
             elseif (strcmp(field, 'compile_mex'))
                 disp(['Option compile_mex is not supported anymore,'...
                     'please use compile_interface instead or dont set the option.', ...

@@ -68,6 +68,12 @@ function ocp_json = set_up_acados_ocp_nlp_json(obj, simulink_opts)
     else
         ocp_json.solver_options.sim_method_num_stages = obj.opts_struct.sim_method_num_stages * ones(1, N);
     end
+    if length(obj.opts_struct.sim_method_jac_reuse) == N
+        ocp_json.solver_options.sim_method_jac_reuse = obj.opts_struct.sim_method_jac_reuse;
+    else
+        ocp_json.solver_options.sim_method_jac_reuse = obj.opts_struct.sim_method_jac_reuse * ones(1, N);
+    end
+
     ocp_json.solver_options.sim_method_newton_iter = obj.opts_struct.sim_method_newton_iter;
     ocp_json.solver_options.nlp_solver_max_iter = obj.opts_struct.nlp_solver_max_iter;
     ocp_json.solver_options.nlp_solver_tol_stat = obj.opts_struct.nlp_solver_tol_stat;
@@ -113,6 +119,7 @@ function ocp_json = set_up_acados_ocp_nlp_json(obj, simulink_opts)
     ocp_json.solver_options.exact_hess_constr = obj.opts_struct.exact_hess_constr;
 
     ocp_json.solver_options.time_steps = obj.opts_struct.time_steps;
+    ocp_json.solver_options.print_level = obj.opts_struct.print_level;
 
     %% dims
     % path
@@ -132,19 +139,10 @@ function ocp_json = set_up_acados_ocp_nlp_json(obj, simulink_opts)
     ocp_json.dims.ng = model.dim_ng;
     ocp_json.dims.nh = model.dim_nh;
     ocp_json.dims.nbxe_0 = model.dim_nbxe_0;
-
-    if isfield(model, 'dim_ns')
-        ocp_json.dims.ns = model.dim_ns;
-    end
-    if isfield(model, 'dim_nsbx')
-        ocp_json.dims.nsbx = model.dim_nsbx;
-    end
-    if isfield(model, 'dim_nsbu')
-        ocp_json.dims.nsbu = model.dim_nsbu;
-    end
-    if isfield(model, 'dim_nsg')
-        ocp_json.dims.nsg = model.dim_nsg;
-    end
+    ocp_json.dims.ns = model.dim_ns;
+    ocp_json.dims.nsbx = model.dim_nsbx;
+    ocp_json.dims.nsbu = model.dim_nsbu;
+    ocp_json.dims.nsg = model.dim_nsg;
 
     if isfield(model, 'dim_ny_0')
         ocp_json.dims.ny_0 = model.dim_ny_0;
@@ -160,32 +158,18 @@ function ocp_json = set_up_acados_ocp_nlp_json(obj, simulink_opts)
     end
 
     % terminal
-    %% TODO: probably all isfields are redundant
-    if isfield(model, 'dim_nbx_e')
-        ocp_json.dims.nbx_e = model.dim_nbx_e;
-    end
-    if isfield(model, 'dim_ng_e')
-        ocp_json.dims.ng_e = model.dim_ng_e;
-    end
+    ocp_json.dims.nbx_e = model.dim_nbx_e;
+    ocp_json.dims.ng_e = model.dim_ng_e;
     if isfield(model, 'dim_ny_e')
         ocp_json.dims.ny_e = model.dim_ny_e;
     elseif strcmp(model.cost_type_e, 'ext_cost')
         ocp_json.dims.ny_e = 0;
     end
-    if isfield(model, 'dim_nh_e')
-        ocp_json.dims.nh_e = model.dim_nh_e;
-    end
-    if isfield(model, 'dim_ns_e')
-        ocp_json.dims.ns_e = model.dim_ns_e;
-    end
-    if isfield(model, 'dim_nsh_e')
-        ocp_json.dims.nsh_e = model.dim_nsh_e;
-    end
-    if isfield(model, 'dim_nsg_e')
-        ocp_json.dims.nsg_e = model.dim_nsg_e;
-    end
-    % missing in MEX
-    % ocp_json.dims.nsbx_e = model.dim_nsbx_e;
+    ocp_json.dims.nh_e = model.dim_nh_e;
+    ocp_json.dims.ns_e = model.dim_ns_e;
+    ocp_json.dims.nsh_e = model.dim_nsh_e;
+    ocp_json.dims.nsg_e = model.dim_nsg_e;
+    ocp_json.dims.nsbx_e = model.dim_nsbx_e;
 
     if isfield(model, 'dim_gnsf_nx1')
         ocp_json.dims.gnsf_nx1 = model.dim_gnsf_nx1;
@@ -233,10 +217,13 @@ function ocp_json = set_up_acados_ocp_nlp_json(obj, simulink_opts)
 
     % parameters
     if model.dim_np > 0
-        % TODO: add option to initialize parameters in model.
-        warning(['model parameters value cannot be defined (yet) for ocp json.', ...
-                    10 'Using zeros(np,1) by default.' 10 'You can update them later using the solver object.']);
-        ocp_json.parameter_values = zeros(model.dim_np,1);
+        if isempty(obj.opts_struct.parameter_values)
+            warning(['opts_struct.parameter_values are not set.', ...
+                        10 'Using zeros(np,1) by default.' 10 'You can update them later using the solver object.']);
+            ocp_json.parameter_values = zeros(model.dim_np,1);
+        else
+            ocp_json.parameter_values = obj.opts_struct.parameter_values(:);
+        end
     end
 
     %% constraints
@@ -297,16 +284,11 @@ function ocp_json = set_up_acados_ocp_nlp_json(obj, simulink_opts)
         else
             ocp_json.constraints.usbx = zeros(ocp_json.dims.nsbx, 1);
         end
-        % TODO(oj): add nsbx_e properly in Matlab:
-        ocp_json.dims.nsbx_e = model.dim_nsbx;
-        ocp_json.constraints.idxsbx_e = ocp_json.constraints.idxsbx;
-        ocp_json.constraints.lsbx_e = ocp_json.constraints.lsbx;
-        ocp_json.constraints.usbx_e = ocp_json.constraints.usbx;
     end
 
 
     if ocp_json.dims.nsbu > 0
-        ocp_json.constraints.idxsbu = J_to_idx_slack(model.Jsbu);
+        ocp_json.constraints.idxsbu = J_to_idx_slack(model.constr_Jsbu);
         if isfield(model, 'constr_lsbu')
             ocp_json.constraints.lsbu = model.constr_lsbu;
         else
@@ -363,6 +345,20 @@ function ocp_json = set_up_acados_ocp_nlp_json(obj, simulink_opts)
     if ocp_json.dims.nh_e > 0    
         ocp_json.constraints.lh_e = model.constr_lh_e;
         ocp_json.constraints.uh_e = model.constr_uh_e;
+    end
+
+    if ocp_json.dims.nsbx_e > 0
+        ocp_json.constraints.idxsbx = J_to_idx_slack(model.constr_Jsbx_e);
+        if isfield(model, 'constr_lsbx_e')
+            ocp_json.constraints.lsbx_e = model.constr_lsbx_e;
+        else
+            ocp_json.constraints.lsbx_e = zeros(ocp_json.dims.nsbx_e, 1);
+        end
+        if isfield(model, 'constr_usbx_e')
+            ocp_json.constraints.usbx_e = model.constr_usbx_e;
+        else
+            ocp_json.constraints.usbx_e = zeros(ocp_json.dims.nsbx_e, 1);
+        end
     end
 
     if ocp_json.dims.nsg_e > 0
