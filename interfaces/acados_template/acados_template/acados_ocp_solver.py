@@ -90,7 +90,7 @@ def make_ocp_dims_consistent(acados_ocp):
 
     ## cost
     # initial stage - if not set, copy fields from path constraints
-    if cost.cost_type_0 == None:
+    if cost.cost_type_0 is None:
         cost.cost_type_0 = cost.cost_type
         cost.W_0 = cost.W
         cost.Vx_0 = cost.Vx
@@ -100,6 +100,7 @@ def make_ocp_dims_consistent(acados_ocp):
         cost.cost_ext_fun_type_0 = cost.cost_ext_fun_type
         model.cost_y_expr_0 = model.cost_y_expr
         model.cost_expr_ext_cost_0 = model.cost_expr_ext_cost
+        model.cost_expr_ext_cost_custom_hess_0 = model.cost_expr_ext_cost_custom_hess
 
     if cost.cost_type_0 == 'LINEAR_LS':
         ny_0 = cost.W_0.shape[0]
@@ -1302,7 +1303,7 @@ class AcadosOcpSolver:
         Set numerical data in the constraint module of the solver.
 
             :param stage: integer corresponding to shooting node
-            :param field: string in ['lbx', 'ubx', 'lbu', 'ubu', 'lg', 'ug', 'lh', 'uh', 'uphi']
+            :param field: string in ['lbx', 'ubx', 'lbu', 'ubu', 'lg', 'ug', 'lh', 'uh', 'uphi', 'C', 'D']
             :param value: of appropriate size
         """
         # cast value_ to avoid conversion issues
