@@ -958,6 +958,26 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
     if (strcmp(dyn_type, "discrete"))
     {
+        // collocation_type
+        char *collocation_type = mxArrayToString( mxGetField( matlab_opts, 0, "collocation_type" ) );
+        sim_collocation_type collo_type;
+        if (!strcmp(collocation_type, "gauss_legendre"))
+        {
+            collo_type = GAUSS_LEGENDRE;
+        }
+        else if (!strcmp(collocation_type, "gauss_radau_iia"))
+        {
+            collo_type = GAUSS_RADAU_IIA;
+        }
+        else
+        {
+            MEX_FIELD_VALUE_NOT_SUPPORTED_SUGGEST(fun_name, "collocation_type", collocation_type, "gauss_legendre, gauss_radau_iia");
+        }
+        for (int ii=0; ii<N; ii++)
+        {
+            ocp_nlp_solver_opts_set_at_stage(config, opts, ii, "dynamics_collocation_type", &collo_type);
+        }
+
         // sim_method_num_stages
         sprintf(matlab_field_name, "sim_method_num_stages");
         const mxArray *matlab_array;
@@ -1099,7 +1119,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     // levenberg_marquardt regularization
     if (mxGetField( matlab_opts, 0, "levenberg_marquardt" )!=NULL)
     {
-        double levenberg_marquardt = mxGetScalar( mxGetField( matlab_opts, 0, "levenberg_marquardt" ) );
+        const mxArray *matlab_array;
+        sprintf(matlab_field_name, "levenberg_marquardt");
+        matlab_array = mxGetField( matlab_opts, 0, matlab_field_name );
+        int matlab_size = (int) mxGetNumberOfElements( matlab_array );
+        MEX_DIM_CHECK_VEC(fun_name, matlab_field_name, matlab_size, 1);
+        double levenberg_marquardt = mxGetScalar( matlab_array );
         ocp_nlp_solver_opts_set(config, opts, "levenberg_marquardt", &levenberg_marquardt);
     }
 
