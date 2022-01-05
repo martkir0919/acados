@@ -58,6 +58,10 @@ if(ACADOS_OCTAVE_TEMPLATE)
                 COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_matlab_octave/test
                 octave --no-gui --no-window-system ./run_test_template_ocp_pendulum_gnsf.m)
 
+        add_test(NAME octave_test_template_lin_mass_ocp
+                COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_matlab_octave/test
+                octave --no-gui --no-window-system ./run_test_template_lin_mass_ocp.m)
+
         add_test(NAME octave_test_template_ocp_pendulum_nls
                 COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_matlab_octave/test
                 octave --no-gui --no-window-system ./run_test_template_ocp_pendulum_nls.m)
@@ -199,6 +203,9 @@ add_test(NAME python_pendulum_ext_sim_example
 add_test(NAME python_pendulum_closed_loop_example
         COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_python/getting_started
         python minimal_example_closed_loop.py)
+add_test(NAME python_pendulum_ocp_time_optimal
+        COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_python/crane
+        python time_optimal_example.py)
 
 # example_ocp_dynamics_formulations all versions
 add_test(NAME python_pendulum_ocp_IRK
