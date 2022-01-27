@@ -1040,6 +1040,7 @@ class AcadosOcpSolver:
             - res_comp: residual wrt complementarity conditions
             - qp_stat: status of QP solver
             - qp_iter: number of QP iterations
+            - alpha: SQP step size
             - qp_res_stat: stationarity residual of the last QP solution
             - qp_res_eq: residual wrt equality constraints (dynamics) of the last QP solution
             - qp_res_ineq: residual wrt inequality constraints (constraints)  of the last QP solution
@@ -1048,16 +1049,15 @@ class AcadosOcpSolver:
         stat = self.get_stats("statistics")
 
         if self.acados_ocp.solver_options.nlp_solver_type == 'SQP':
-            print('\niter\tres_stat\tres_eq\t\tres_ineq\tres_comp\tqp_stat\tqp_iter')
-            if stat.shape[0]>7:
+            print('\niter\tres_stat\tres_eq\t\tres_ineq\tres_comp\tqp_stat\tqp_iter\talpha')
+            if stat.shape[0]>8:
                 print('\tqp_res_stat\tqp_res_eq\tqp_res_ineq\tqp_res_comp')
             for jj in range(stat.shape[1]):
-                print('{:d}\t{:e}\t{:e}\t{:e}\t{:e}\t{:d}\t{:d}'.format( \
-                     int(stat[0][jj]), stat[1][jj], stat[2][jj], \
-                     stat[3][jj], stat[4][jj], int(stat[5][jj]), int(stat[6][jj])))
-                if stat.shape[0]>7:
+                print(f'{int(stat[0][jj]):d}\t{stat[1][jj]:e}\t{stat[2][jj]:e}\t{stat[3][jj]:e}\t' +
+                      f'{stat[4][jj]:e}\t{int(stat[5][jj]):d}\t{int(stat[6][jj]):d}\t{stat[7][jj]:e}\t')
+                if stat.shape[0]>8:
                     print('\t{:e}\t{:e}\t{:e}\t{:e}'.format( \
-                        stat[7][jj], stat[8][jj], stat[9][jj], stat[10][jj]))
+                        stat[8][jj], stat[9][jj], stat[10][jj], stat[11][jj]))
             print('\n')
         elif self.acados_ocp.solver_options.nlp_solver_type == 'SQP_RTI':
             print('\niter\tqp_stat\tqp_iter')
@@ -1129,26 +1129,46 @@ class AcadosOcpSolver:
         """
         Get the information of the last solver call.
 
-            :param field: string in ['statistics', 'time_tot', 'time_lin', 'time_sim', 'time_sim_ad', 'time_sim_la', 'time_qp', 'time_qp_solver_call', 'time_reg', 'sqp_iter', 'residuals']
+            :param field: string in ['statistics', 'time_tot', 'time_lin', 'time_sim', 'time_sim_ad', 'time_sim_la', 'time_qp', 'time_qp_solver_call', 'time_reg', 'sqp_iter', 'residuals', 'qp_iter', 'alpha']
+
+        Available fileds:
+            - time_tot: total CPU time previous call
+            - time_lin: CPU time for linearization
+            - time_sim: CPU time for integrator
+            - time_sim_ad: CPU time for integrator contribution of external function calls
+            - time_sim_la: CPU time for integrator contribution of linear algebra
+            - time_qp: CPU time qp solution
+            - time_qp_solver_call: CPU time inside qp solver (without converting the QP)
+            - time_qp_xcond: time_glob: CPU time globalization
+            - time_solution_sensitivities: CPU time for previous call to eval_param_sens
+            - time_reg: CPU time regularization
+            - sqp_iter: number of SQP iterations
+            - qp_iter: vector of QP iterations for last SQP call
+            - statistics: table with info about last iteration
+            - stat_m: number of rows in statistics matrix
+            - stat_n: number of columns in statistics matrix
+            - residuals: residuals of last iterate
+            - alpha: step sizes of SQP iterations
         """
 
-        fields = ['time_tot',  # total cpu time previous call
-                  'time_lin',  # cpu time for linearization
-                  'time_sim',  # cpu time for integrator
-                  'time_sim_ad',  # cpu time for integrator contribution of external function calls
-                  'time_sim_la',  # cpu time for integrator contribution of linear algebra
-                  'time_qp',   # cpu time qp solution
-                  'time_qp_solver_call',  # cpu time inside qp solver (without converting the QP)
+        fields = ['time_tot',
+                  'time_lin',
+                  'time_sim',
+                  'time_sim_ad',
+                  'time_sim_la',
+                  'time_qp',
+                  'time_qp_solver_call',
                   'time_qp_xcond',
-                  'time_glob',  # cpu time globalization
-                  'time_solution_sensitivities',  # cpu time for previous call to eval_param_sens
-                  'time_reg',  # cpu time regularization
-                  'sqp_iter',  # number of SQP iterations
-                  'qp_iter',  # vector of QP iterations for last SQP call
-                  'statistics',  # table with info about last iteration
+                  'time_glob',
+                  'time_solution_sensitivities',
+                  'time_reg',
+                  'sqp_iter',
+                  'qp_iter',
+                  'statistics',
                   'stat_m',
                   'stat_n',
                   'residuals',
+                  'alpha',
                 ]
 
         field = field_
@@ -1179,6 +1199,13 @@ class AcadosOcpSolver:
             elif self.acados_ocp.solver_options.nlp_solver_type == 'SQP_RTI':
                 out = full_stats[2, :]
 
+        elif field_ == 'alpha':
+            full_stats = self.get_stats('statistics')
+            if self.acados_ocp.solver_options.nlp_solver_type == 'SQP':
+                out = full_stats[7, :]
+            else: # self.acados_ocp.solver_options.nlp_solver_type == 'SQP_RTI':
+                raise Exception("alpha values are not available for SQP_RTI")
+
         elif field_ == 'residuals':
             if self.acados_ocp.solver_options.nlp_solver_type == 'SQP':
                 full_stats = self.get_stats('statistics')
@@ -1187,14 +1214,13 @@ class AcadosOcpSolver:
                 else: # when exiting with max_iter, residuals are computed for second last iterate only
                     out = (full_stats.T)[-2][1:5]
             else:
-                Exception("residuals are not computed for SQP_RTI")
-
+                raise Exception("residuals are not computed for SQP_RTI")
 
         else:
             out = np.ascontiguousarray(np.zeros((1,)), dtype=np.float64)
             out_data = cast(out.ctypes.data, POINTER(c_double))
 
-        if not field_ in ['qp_iter', 'residuals']:
+        if not field_ in ['qp_iter', 'residuals', 'alpha']:
             self.shared_lib.ocp_nlp_get.argtypes = [c_void_p, c_void_p, c_char_p, c_void_p]
             self.shared_lib.ocp_nlp_get(self.nlp_config, self.nlp_solver, field, out_data)
 
@@ -1525,11 +1551,11 @@ class AcadosOcpSolver:
         """
         Set options of the solver.
 
-            :param field: string, e.g. 'print_level', 'rti_phase', 'initialize_t_slacks', 'step_length', 'alpha_min', 'alpha_reduction', 'qp_warm_start'
+            :param field: string, e.g. 'print_level', 'rti_phase', 'initialize_t_slacks', 'step_length', 'alpha_min', 'alpha_reduction', 'qp_warm_start', 'line_search_use_sufficient_descent', 'full_step_dual', 'globalization_use_SOC'
             :param value: of type int, float
         """
-        int_fields = ['print_level', 'rti_phase', 'initialize_t_slacks', 'qp_warm_start']
-        double_fields = ['step_length', 'tol_eq', 'tol_stat', 'tol_ineq', 'tol_comp', 'alpha_min', 'alpha_reduction']
+        int_fields = ['print_level', 'rti_phase', 'initialize_t_slacks', 'qp_warm_start', 'line_search_use_sufficient_descent', 'full_step_dual', 'globalization_use_SOC']
+        double_fields = ['step_length', 'tol_eq', 'tol_stat', 'tol_ineq', 'tol_comp', 'alpha_min', 'alpha_reduction', 'eps_sufficient_descent']
         string_fields = ['globalization']
 
         # check field availability and type

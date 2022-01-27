@@ -1908,7 +1908,18 @@ int {{ model.name }}_acados_create_with_discretization({{ model.name }}_solver_c
 
     double alpha_reduction = {{ solver_options.alpha_reduction }};
     ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "alpha_reduction", &alpha_reduction);
+
+    int line_search_use_sufficient_descent = {{ solver_options.line_search_use_sufficient_descent }};
+    ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "line_search_use_sufficient_descent", &line_search_use_sufficient_descent);
+
+    int globalization_use_SOC = {{ solver_options.globalization_use_SOC }};
+    ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "globalization_use_SOC", &globalization_use_SOC);
+
+    double eps_sufficient_descent = {{ solver_options.eps_sufficient_descent }};
+    ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "eps_sufficient_descent", &eps_sufficient_descent);
 {%- endif -%}
+    int full_step_dual = {{ solver_options.full_step_dual }};
+    ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "full_step_dual", &full_step_dual);
 
 {%- if dims.nz > 0 %}
     // TODO: these options are lower level -> should be encapsulated! maybe through hessian approx option.
@@ -2036,9 +2047,32 @@ int {{ model.name }}_acados_create_with_discretization({{ model.name }}_solver_c
     ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "qp_cond_N", &qp_solver_cond_N);
 {% endif %}
 
+
+{% if solver_options.nlp_solver_type == "SQP" %}
+    // set SQP specific options
+    double nlp_solver_tol_stat = {{ solver_options.nlp_solver_tol_stat }};
+    ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "tol_stat", &nlp_solver_tol_stat);
+
+    double nlp_solver_tol_eq = {{ solver_options.nlp_solver_tol_eq }};
+    ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "tol_eq", &nlp_solver_tol_eq);
+
+    double nlp_solver_tol_ineq = {{ solver_options.nlp_solver_tol_ineq }};
+    ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "tol_ineq", &nlp_solver_tol_ineq);
+
+    double nlp_solver_tol_comp = {{ solver_options.nlp_solver_tol_comp }};
+    ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "tol_comp", &nlp_solver_tol_comp);
+
+    int nlp_solver_max_iter = {{ solver_options.nlp_solver_max_iter }};
+    ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "max_iter", &nlp_solver_max_iter);
+
+    int initialize_t_slacks = {{ solver_options.initialize_t_slacks }};
+    ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "initialize_t_slacks", &initialize_t_slacks);
+{%- endif %}
+
     int qp_solver_iter_max = {{ solver_options.qp_solver_iter_max }};
     ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "qp_iter_max", &qp_solver_iter_max);
 
+{# NOTE: qp_solver tolerances must be set after NLP ones, since the setter for NLP tolerances sets the QP tolerances to the sam values. #}
     {%- if solver_options.qp_solver_tol_stat %}
     double qp_solver_tol_stat = {{ solver_options.qp_solver_tol_stat }};
     ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "qp_tol_stat", &qp_solver_tol_stat);
@@ -2063,27 +2097,6 @@ int {{ model.name }}_acados_create_with_discretization({{ model.name }}_solver_c
     int qp_solver_warm_start = {{ solver_options.qp_solver_warm_start }};
     ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "qp_warm_start", &qp_solver_warm_start);
     {%- endif -%}
-    
-{% if solver_options.nlp_solver_type == "SQP" %}
-    // set SQP specific options
-    double nlp_solver_tol_stat = {{ solver_options.nlp_solver_tol_stat }};
-    ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "tol_stat", &nlp_solver_tol_stat);
-
-    double nlp_solver_tol_eq = {{ solver_options.nlp_solver_tol_eq }};
-    ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "tol_eq", &nlp_solver_tol_eq);
-
-    double nlp_solver_tol_ineq = {{ solver_options.nlp_solver_tol_ineq }};
-    ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "tol_ineq", &nlp_solver_tol_ineq);
-
-    double nlp_solver_tol_comp = {{ solver_options.nlp_solver_tol_comp }};
-    ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "tol_comp", &nlp_solver_tol_comp);
-
-    int nlp_solver_max_iter = {{ solver_options.nlp_solver_max_iter }};
-    ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "max_iter", &nlp_solver_max_iter);
-
-    int initialize_t_slacks = {{ solver_options.initialize_t_slacks }};
-    ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "initialize_t_slacks", &initialize_t_slacks);
-{%- endif %}
 
     int print_level = {{ solver_options.print_level }};
     ocp_nlp_solver_opts_set(nlp_config, capsule->nlp_opts, "print_level", &print_level);
@@ -2488,18 +2501,19 @@ void {{ model.name }}_acados_print_stats({{ model.name }}_solver_capsule * capsu
     ocp_nlp_get(capsule->nlp_config, capsule->nlp_solver, "stat_n", &stat_n);
     ocp_nlp_get(capsule->nlp_config, capsule->nlp_solver, "stat_m", &stat_m);
 
-    {% set stat_n_max = 10 %}
+    {% set stat_n_max = 12 %}
     double stat[{{ solver_options.nlp_solver_max_iter * stat_n_max }}];
     ocp_nlp_get(capsule->nlp_config, capsule->nlp_solver, "statistics", stat);
 
     int nrow = sqp_iter+1 < stat_m ? sqp_iter+1 : stat_m;
 
-    printf("iter\tres_stat\tres_eq\t\tres_ineq\tres_comp\tqp_stat\tqp_iter\n");
+{%- if solver_options.nlp_solver_type == "SQP" %}
+    printf("iter\tres_stat\tres_eq\t\tres_ineq\tres_comp\tqp_stat\tqp_iter\talpha\n");
     for (int i = 0; i < nrow; i++)
     {
         for (int j = 0; j < stat_n + 1; j++)
         {
-            if (j == 0 || j > 4)
+            if (j == 0 || j == 5 || j == 6)
             {
                 tmp_int = (int) stat[i + j * nrow];
                 printf("%d\t", tmp_int);
@@ -2511,5 +2525,17 @@ void {{ model.name }}_acados_print_stats({{ model.name }}_solver_capsule * capsu
         }
         printf("\n");
     }
+{% else %}
+    printf("iter\tqp_stat\tqp_iter\n");
+    for (int i = 0; i < nrow; i++)
+    {
+        for (int j = 0; j < stat_n + 1; j++)
+        {
+            tmp_int = (int) stat[i + j * nrow];
+            printf("%d\t", tmp_int);
+        }
+        printf("\n");
+    }
+{%- endif %}
 }
 
