@@ -5,6 +5,9 @@
     "acados_include_path": [
         "str"
     ],
+    "cython_include_dirs": [
+        "str"
+    ],
     "model": {
          "name" : [
             "str"
@@ -663,6 +666,9 @@
             ]
         ],
         "hessian_approx": [
+            "str"
+        ],
+        "hpipm_mode": [
             "str"
         ],
         "regularize_method": [

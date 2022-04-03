@@ -1,3 +1,4 @@
+# -*- coding: future_fstrings -*-
 # Minimal example showing how to reuse the exported c-code with
 # different time-steps.
 #
@@ -136,7 +137,7 @@ status = ocp_solver.solve()
 
 if status != 0:
     ocp_solver.print_statistics()  # encapsulates: stat = ocp_solver.get_stats("statistics")
-    raise Exception('acados returned status {}. Exiting.'.format(status))
+    raise Exception(f'acados returned status {status}.')
 
 # get solution
 for i in range(N0):
@@ -163,17 +164,17 @@ ocp_solver.set_new_time_steps(new_time_steps1)
 print(80*'-')
 if ocp.solver_options.qp_solver.startswith('PARTIAL'):
     ocp_solver.update_qp_solver_cond_N(condN12)
-    print(f'solve use-case 2 with N = {N12}, cond_N = {condN12} and Tf = {Tf_2} s (instead of {Tf_01} s):')
+    print(f'solve use-case 2 with N = {N12}, cond_N = {condN12} and Tf = {Tf_01} s (instead of {Tf_01} s):')
     X_true_label = f'use-case 1: N={N12}, N_cond = {condN12}'
 else:
-    print(f'solve use-case 2 with N = {N12} and Tf = {Tf_2} s (instead of {Tf_01} s):')
+    print(f'solve use-case 2 with N = {N12} and Tf = {Tf_01} s (instead of {Tf_01} s):')
     X_true_label = f'use-case 1: N={N12}'
 
 status = ocp_solver.solve()
 
 if status != 0:
     ocp_solver.print_statistics()  # encapsulates: stat = ocp_solver.get_stats("statistics")
-    raise Exception('acados returned status {}. Exiting.'.format(status))
+    raise Exception(f'acados returned status {status}.')
 
 # get solution
 for i in range(N12):
@@ -208,7 +209,7 @@ status = ocp_solver.solve()
 
 if status != 0:
     ocp_solver.print_statistics()  # encapsulates: stat = ocp_solver.get_stats("statistics")
-    raise Exception('acados returned status {}. Exiting.'.format(status))
+    raise Exception(f'acados returned status {status}.')
 
 # get solution
 for i in range(N12):

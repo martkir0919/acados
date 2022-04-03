@@ -1940,12 +1940,7 @@ void ocp_nlp_alias_memory_to_submodules(ocp_nlp_config *config, ocp_nlp_dims *di
         config->dynamics[i]->memory_set_sim_guess_ptr(nlp_mem->sim_guess+i, nlp_mem->set_sim_guess+i, nlp_mem->dynamics[i]);
         config->dynamics[i]->memory_set_z_alg_ptr(nlp_mem->z_alg+i, nlp_mem->dynamics[i]);
     }
-#pragma omp parallel for
-    for (int i = 0; i < N; i++)
-    {
-        i+=1;
-    }
-    
+
     // alias to cost_memory
 #if defined(ACADOS_WITH_OPENMP)
     #pragma omp for nowait
@@ -2010,11 +2005,16 @@ void ocp_nlp_alias_memory_to_submodules(ocp_nlp_config *config, ocp_nlp_dims *di
 }
 
 
-void ocp_nlp_initialize_qp(ocp_nlp_config *config, ocp_nlp_dims *dims, ocp_nlp_in *in,
+void ocp_nlp_initialize_submodules(ocp_nlp_config *config, ocp_nlp_dims *dims, ocp_nlp_in *in,
          ocp_nlp_out *out, ocp_nlp_opts *opts, ocp_nlp_memory *mem, ocp_nlp_workspace *work)
 {
     int N = dims->N;
 
+    // NOTE: initialize is called at the start of every NLP solver call.
+    // It computes things in submodules based on stuff that can be changed by the user between
+    // subsequent solver calls, e.g. factorization of weight matrix.
+    // IN CONTRAST: precompute is only called once after solver creation
+    //  -> computes things that are not expected to change between subsequent solver calls
 #if defined(ACADOS_WITH_OPENMP)
     #pragma omp parallel for
 #endif
@@ -2792,6 +2792,8 @@ acados_size_t ocp_nlp_res_calculate_size(ocp_nlp_dims *dims)
     size += 1 * blasfeo_memsize_dvec(nv[N]);      // res_stat
     size += 2 * blasfeo_memsize_dvec(2 * ni[N]);  // res_ineq res_comp
 
+    size += 1 * blasfeo_memsize_dvec(N);      // tmp
+
     size += 8;   // initial align
     size += 8;   // blasfeo_struct align
     size += 64;  // blasfeo_mem align
@@ -2856,7 +2858,11 @@ ocp_nlp_res *ocp_nlp_res_assign(ocp_nlp_dims *dims, void *raw_memory)
         assign_and_advance_blasfeo_dvec_mem(2 * ni[i], res->res_comp + i, &c_ptr);
     }
 
+    assign_and_advance_blasfeo_dvec_mem(N, &res->tmp, &c_ptr);
+
     res->memsize = ocp_nlp_res_calculate_size(dims);
+
+    assert((char *) raw_memory + res->memsize >= c_ptr);
 
     return res;
 }
@@ -2874,18 +2880,10 @@ void ocp_nlp_res_compute(ocp_nlp_dims *dims, ocp_nlp_in *in, ocp_nlp_out *out, o
     int *ni = dims->ni;
 
     double tmp_res;
-    double inf_norm_res_stat = 0.0;
-    double inf_norm_res_eq = 0.0;
-    double inf_norm_res_ineq = 0.0;
-    double inf_norm_res_comp = 0.0;
 
     // res_stat
 #if defined(ACADOS_WITH_OPENMP)
-    #pragma omp declare reduction(dmax : double : \
-                                  omp_out = (omp_in > omp_out) ? omp_in : omp_out)
-    #pragma omp parallel
-    { // beginning of parallel region
-    #pragma omp for private(tmp_res) reduction(dmax:inf_norm_res_stat) nowait
+    #pragma omp parallel for private(tmp_res)
 #endif
     for (int i = 0; i <= N; i++)
     {
@@ -2894,48 +2892,47 @@ void ocp_nlp_res_compute(ocp_nlp_dims *dims, ocp_nlp_in *in, ocp_nlp_out *out, o
         blasfeo_daxpy(nu[i] + nx[i], -1.0, mem->dyn_adj + i, 0, res->res_stat + i, 0,
                       res->res_stat + i, 0);
         blasfeo_dvecnrm_inf(nv[i], res->res_stat + i, 0, &tmp_res);
-        inf_norm_res_stat = tmp_res > inf_norm_res_stat ? tmp_res : inf_norm_res_stat;
+        blasfeo_dvecse(1, tmp_res, &res->tmp, i);
     }
+    blasfeo_dvecnrm_inf(N+1, &res->tmp, 0, &res->inf_norm_res_stat);
 
     // res_eq
 #if defined(ACADOS_WITH_OPENMP)
-    #pragma omp for private(tmp_res) reduction(dmax:inf_norm_res_eq) nowait
+    #pragma omp parallel for private(tmp_res)
 #endif
     for (int i = 0; i < N; i++)
     {
         blasfeo_dveccp(nx[i + 1], mem->dyn_fun + i, 0, res->res_eq + i, 0);
         blasfeo_dvecnrm_inf(nx[i + 1], res->res_eq + i, 0, &tmp_res);
-        inf_norm_res_eq = tmp_res > inf_norm_res_eq ? tmp_res : inf_norm_res_eq;
+        blasfeo_dvecse(1, tmp_res, &res->tmp, i);
     }
+    blasfeo_dvecnrm_inf(N, &res->tmp, 0, &res->inf_norm_res_eq);
 
     // res_ineq
 #if defined(ACADOS_WITH_OPENMP)
-    #pragma omp for private(tmp_res) reduction(dmax:inf_norm_res_ineq) nowait
+    #pragma omp parallel for private(tmp_res)
 #endif
     for (int i = 0; i <= N; i++)
     {
         blasfeo_daxpy(2 * ni[i], 1.0, out->t + i, 0, mem->ineq_fun + i, 0, res->res_ineq + i, 0);
         blasfeo_dvecnrm_inf(2 * ni[i], res->res_ineq + i, 0, &tmp_res);
-        inf_norm_res_ineq = tmp_res > inf_norm_res_ineq ? tmp_res : inf_norm_res_ineq;
+        blasfeo_dvecse(1, tmp_res, &res->tmp, i);
     }
+    blasfeo_dvecnrm_inf(N+1, &res->tmp, 0, &res->inf_norm_res_ineq);
 
     // res_comp
 #if defined(ACADOS_WITH_OPENMP)
-    #pragma omp for private(tmp_res) reduction(dmax:inf_norm_res_comp) nowait
+    #pragma omp parallel for private(tmp_res)
 #endif
     for (int i = 0; i <= N; i++)
     {
         blasfeo_dvecmul(2 * ni[i], out->lam + i, 0, out->t + i, 0, res->res_comp + i, 0);
         blasfeo_dvecnrm_inf(2 * ni[i], res->res_comp + i, 0, &tmp_res);
-        inf_norm_res_comp = tmp_res > inf_norm_res_comp ? tmp_res : inf_norm_res_comp;
+        blasfeo_dvecse(1, tmp_res, &res->tmp, i);
     }
-#if defined(ACADOS_WITH_OPENMP)
-    } // end of parallel region
-#endif
-    res->inf_norm_res_stat = inf_norm_res_stat;
-    res->inf_norm_res_eq = inf_norm_res_eq;
-    res->inf_norm_res_ineq = inf_norm_res_ineq;
-    res->inf_norm_res_comp = inf_norm_res_comp;
+    blasfeo_dvecnrm_inf(N+1, &res->tmp, 0, &res->inf_norm_res_comp);
+
+
     // printf("computed residuals stat: %e, eq: %e, ineq: %e, comp: %e\n", res->inf_norm_res_stat, res->inf_norm_res_eq,
     //        res->inf_norm_res_ineq, res->inf_norm_res_comp);
 }

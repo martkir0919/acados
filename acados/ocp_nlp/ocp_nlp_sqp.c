@@ -512,7 +512,7 @@ int ocp_nlp_sqp(void *config_, void *dims_, void *nlp_in_, void *nlp_out_,
         ocp_nlp_initialize_t_slacks(config, dims, nlp_in, nlp_out, nlp_opts, nlp_mem, nlp_work);
 
     // initialize QP
-    ocp_nlp_initialize_qp(config, dims, nlp_in, nlp_out, nlp_opts, nlp_mem, nlp_work);
+    ocp_nlp_initialize_submodules(config, dims, nlp_in, nlp_out, nlp_opts, nlp_mem, nlp_work);
 
     // main sqp loop
     int sqp_iter = 0;
@@ -581,6 +581,20 @@ int ocp_nlp_sqp(void *config_, void *dims_, void *nlp_in_, void *nlp_out_,
                     nlp_res->inf_norm_res_comp );
                 printf("\n\n");
             }
+
+            return mem->status;
+        }
+        // check for nans
+        else if (isnan(nlp_res->inf_norm_res_stat) || isnan(nlp_res->inf_norm_res_eq) ||
+             isnan(nlp_res->inf_norm_res_ineq) || isnan(nlp_res->inf_norm_res_comp))
+        {
+#if defined(ACADOS_WITH_OPENMP)
+            // restore number of threads
+            omp_set_num_threads(num_threads_bkp);
+#endif
+            mem->status = ACADOS_FAILURE;
+            mem->sqp_iter = sqp_iter;
+            mem->time_tot = acados_toc(&timer0);
 
             return mem->status;
         }
@@ -974,6 +988,25 @@ int ocp_nlp_sqp(void *config_, void *dims_, void *nlp_in_, void *nlp_out_,
 
 
 
+void ocp_nlp_sqp_memory_reset_qp_solver(void *config_, void *dims_, void *nlp_in_, void *nlp_out_,
+    void *opts_, void *mem_, void *work_)
+{
+    ocp_nlp_config *config = config_;
+    ocp_nlp_sqp_opts *opts = opts_;
+    ocp_qp_xcond_solver_config *qp_solver = config->qp_solver;
+    ocp_nlp_sqp_memory *mem = mem_;
+    ocp_nlp_memory *nlp_mem = mem->nlp_mem;
+    ocp_nlp_dims *dims = dims_;
+    ocp_nlp_sqp_workspace *work = work_;
+    ocp_nlp_workspace *nlp_work = work->nlp_work;
+
+    // printf("in ocp_nlp_sqp_memory_reset_qp_solver\n\n");
+    config->qp_solver->memory_reset(qp_solver, dims->qp_solver,
+        nlp_mem->qp_in, nlp_mem->qp_out, opts->nlp_opts->qp_solver_opts,
+        nlp_mem->qp_solver_mem, nlp_work->qp_work);
+}
+
+
 int ocp_nlp_sqp_precompute(void *config_, void *dims_, void *nlp_in_, void *nlp_out_,
                 void *opts_, void *mem_, void *work_)
 {
@@ -1235,6 +1268,11 @@ void ocp_nlp_sqp_get(void *config_, void *dims_, void *mem_, const char *field, 
         config->qp_solver->memory_get(config->qp_solver,
             mem->nlp_mem->qp_solver_mem, "iter", return_value_);
     }
+    else if (!strcmp("qp_status", field))
+    {
+        config->qp_solver->memory_get(config->qp_solver,
+            mem->nlp_mem->qp_solver_mem, "status", return_value_);
+    }
     else if (!strcmp("res_stat", field))
     {
         double *value = return_value_;
@@ -1321,6 +1359,7 @@ void ocp_nlp_sqp_config_initialize_default(void *config_)
     config->memory_assign = &ocp_nlp_sqp_memory_assign;
     config->workspace_calculate_size = &ocp_nlp_sqp_workspace_calculate_size;
     config->evaluate = &ocp_nlp_sqp;
+    config->memory_reset_qp_solver = &ocp_nlp_sqp_memory_reset_qp_solver;
     config->eval_param_sens = &ocp_nlp_sqp_eval_param_sens;
     config->config_initialize_default = &ocp_nlp_sqp_config_initialize_default;
     config->precompute = &ocp_nlp_sqp_precompute;
