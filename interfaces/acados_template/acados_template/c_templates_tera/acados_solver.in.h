@@ -99,15 +99,15 @@ typedef struct {{ model.name }}_solver_capsule
     external_function_param_casadi *hess_vde_casadi;
 {%- endif %}
 {% elif solver_options.integrator_type == "IRK" %}
-    external_function_param_casadi *impl_dae_fun;
-    external_function_param_casadi *impl_dae_fun_jac_x_xdot_z;
-    external_function_param_casadi *impl_dae_jac_x_xdot_u_z;
+    external_function_param_{{ model.dyn_ext_fun_type }} *impl_dae_fun;
+    external_function_param_{{ model.dyn_ext_fun_type }} *impl_dae_fun_jac_x_xdot_z;
+    external_function_param_{{ model.dyn_ext_fun_type }} *impl_dae_jac_x_xdot_u_z;
 {% if solver_options.hessian_approx == "EXACT" %}
-    external_function_param_casadi *impl_dae_hess;
+    external_function_param_{{ model.dyn_ext_fun_type }} *impl_dae_hess;
 {%- endif %}
 {% elif solver_options.integrator_type == "LIFTED_IRK" %}
-    external_function_param_casadi *impl_dae_fun;
-    external_function_param_casadi *impl_dae_fun_jac_x_xdot_u;
+    external_function_param_{{ model.dyn_ext_fun_type }} *impl_dae_fun;
+    external_function_param_{{ model.dyn_ext_fun_type }} *impl_dae_fun_jac_x_xdot_u;
 {% elif solver_options.integrator_type == "GNSF" %}
     external_function_param_casadi *gnsf_phi_fun;
     external_function_param_casadi *gnsf_phi_fun_jac_y;
@@ -183,7 +183,7 @@ ACADOS_SYMBOL_EXPORT int {{ model.name }}_acados_free_capsule({{ model.name }}_s
 
 ACADOS_SYMBOL_EXPORT int {{ model.name }}_acados_create({{ model.name }}_solver_capsule * capsule);
 
-ACADOS_SYMBOL_EXPORT int {{ model.name }}_acados_reset({{ model.name }}_solver_capsule* capsule);
+ACADOS_SYMBOL_EXPORT int {{ model.name }}_acados_reset({{ model.name }}_solver_capsule* capsule, int reset_qp_solver_mem);
 
 /**
  * Generic version of {{ model.name }}_acados_create which allows to use a different number of shooting intervals than

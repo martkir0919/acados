@@ -468,35 +468,50 @@ void {{ model.name }}_acados_create_3_create_and_set_functions({{ model.name }}_
 
 {% elif solver_options.integrator_type == "IRK" %}
     // implicit dae
-    capsule->impl_dae_fun = (external_function_param_casadi *) malloc(sizeof(external_function_param_casadi)*N);
+    capsule->impl_dae_fun = (external_function_param_{{ model.dyn_ext_fun_type }} *) malloc(sizeof(external_function_param_{{ model.dyn_ext_fun_type }})*N);
     for (int i = 0; i < N; i++) {
+    {%- if model.dyn_ext_fun_type == "casadi" %}
         MAP_CASADI_FNC(impl_dae_fun[i], {{ model.name }}_impl_dae_fun);
+    {%- else %}
+        capsule->impl_dae_fun[i].fun = &{{ model.dyn_impl_dae_fun }};
+        external_function_param_{{ model.dyn_ext_fun_type }}_create(&capsule->impl_dae_fun[i], {{ dims.np }});
+    {%- endif %}
     }
 
-    capsule->impl_dae_fun_jac_x_xdot_z = (external_function_param_casadi *) malloc(sizeof(external_function_param_casadi)*N);
+    capsule->impl_dae_fun_jac_x_xdot_z = (external_function_param_{{ model.dyn_ext_fun_type }} *) malloc(sizeof(external_function_param_{{ model.dyn_ext_fun_type }})*N);
     for (int i = 0; i < N; i++) {
+    {%- if model.dyn_ext_fun_type == "casadi" %}
         MAP_CASADI_FNC(impl_dae_fun_jac_x_xdot_z[i], {{ model.name }}_impl_dae_fun_jac_x_xdot_z);
+    {%- else %}
+        capsule->impl_dae_fun_jac_x_xdot_z[i].fun = &{{ model.dyn_impl_dae_fun_jac }};
+        external_function_param_{{ model.dyn_ext_fun_type }}_create(&capsule->impl_dae_fun_jac_x_xdot_z[i], {{ dims.np }});
+    {%- endif %}
     }
 
-    capsule->impl_dae_jac_x_xdot_u_z = (external_function_param_casadi *) malloc(sizeof(external_function_param_casadi)*N);
+    capsule->impl_dae_jac_x_xdot_u_z = (external_function_param_{{ model.dyn_ext_fun_type }} *) malloc(sizeof(external_function_param_{{ model.dyn_ext_fun_type }})*N);
     for (int i = 0; i < N; i++) {
+    {%- if model.dyn_ext_fun_type == "casadi" %}
         MAP_CASADI_FNC(impl_dae_jac_x_xdot_u_z[i], {{ model.name }}_impl_dae_jac_x_xdot_u_z);
+    {%- else %}
+        capsule->impl_dae_jac_x_xdot_u_z[i].fun = &{{ model.dyn_impl_dae_jac }};
+        external_function_param_{{ model.dyn_ext_fun_type }}_create(&capsule->impl_dae_jac_x_xdot_u_z[i], {{ dims.np }});
+    {%- endif %}
     }
 
     {%- if solver_options.hessian_approx == "EXACT" %}
-    capsule->impl_dae_hess = (external_function_param_casadi *) malloc(sizeof(external_function_param_casadi)*N);
+    capsule->impl_dae_hess = (external_function_param_{{ model.dyn_ext_fun_type }} *) malloc(sizeof(external_function_param_{{ model.dyn_ext_fun_type }})*N);
     for (int i = 0; i < N; i++) {
         MAP_CASADI_FNC(impl_dae_hess[i], {{ model.name }}_impl_dae_hess);
     }
     {%- endif %}
 {% elif solver_options.integrator_type == "LIFTED_IRK" %}
     // external functions (implicit model)
-    capsule->impl_dae_fun = (external_function_param_casadi *) malloc(sizeof(external_function_param_casadi)*N);
+    capsule->impl_dae_fun = (external_function_param_{{ model.dyn_ext_fun_type }} *) malloc(sizeof(external_function_param_{{ model.dyn_ext_fun_type }})*N);
     for (int i = 0; i < N; i++) {
         MAP_CASADI_FNC(impl_dae_fun[i], {{ model.name }}_impl_dae_fun);
     }
 
-    capsule->impl_dae_fun_jac_x_xdot_u = (external_function_param_casadi *) malloc(sizeof(external_function_param_casadi)*N);
+    capsule->impl_dae_fun_jac_x_xdot_u = (external_function_param_{{ model.dyn_ext_fun_type }} *) malloc(sizeof(external_function_param_{{ model.dyn_ext_fun_type }})*N);
     for (int i = 0; i < N; i++) {
         MAP_CASADI_FNC(impl_dae_fun_jac_x_xdot_u[i], {{ model.name }}_impl_dae_fun_jac_x_xdot_u);
     }
@@ -1861,6 +1876,8 @@ void {{ model.name }}_acados_create_6_set_opts({{ model.name }}_solver_capsule* 
     ocp_nlp_solver_opts_set(nlp_config, nlp_opts, "qp_cond_N", &qp_solver_cond_N);
 {%- endif %}
 
+    int nlp_solver_ext_qp_res = {{ solver_options.nlp_solver_ext_qp_res }};
+    ocp_nlp_solver_opts_set(nlp_config, nlp_opts, "ext_qp_res", &nlp_solver_ext_qp_res);
 
 {%- if solver_options.qp_solver is containing("HPIPM") %}
     // set HPIPM mode: should be done before setting other QP solver options
@@ -2085,7 +2102,7 @@ int {{ model.name }}_acados_update_qp_solver_cond_N({{ model.name }}_solver_caps
 }
 
 
-int {{ model.name }}_acados_reset({{ model.name }}_solver_capsule* capsule)
+int {{ model.name }}_acados_reset({{ model.name }}_solver_capsule* capsule, int reset_qp_solver_mem)
 {
 
     // set initialization to all zeros
@@ -2128,7 +2145,7 @@ int {{ model.name }}_acados_reset({{ model.name }}_solver_capsule* capsule)
     // get qp_status: if NaN -> reset memory
     int qp_status;
     ocp_nlp_get(capsule->nlp_config, capsule->nlp_solver, "qp_status", &qp_status);
-    if (qp_status == 3)
+    if (reset_qp_solver_mem || (qp_status == 3))
     {
         // printf("\nin reset qp_status %d -> resetting QP memory\n", qp_status);
         ocp_nlp_solver_reset_qp_memory(nlp_solver, nlp_in, nlp_out);
@@ -2289,11 +2306,11 @@ int {{ model.name }}_acados_free({{ model.name }}_solver_capsule* capsule)
 {%- if solver_options.integrator_type == "IRK" %}
     for (int i = 0; i < N; i++)
     {
-        external_function_param_casadi_free(&capsule->impl_dae_fun[i]);
-        external_function_param_casadi_free(&capsule->impl_dae_fun_jac_x_xdot_z[i]);
-        external_function_param_casadi_free(&capsule->impl_dae_jac_x_xdot_u_z[i]);
+        external_function_param_{{ model.dyn_ext_fun_type }}_free(&capsule->impl_dae_fun[i]);
+        external_function_param_{{ model.dyn_ext_fun_type }}_free(&capsule->impl_dae_fun_jac_x_xdot_z[i]);
+        external_function_param_{{ model.dyn_ext_fun_type }}_free(&capsule->impl_dae_jac_x_xdot_u_z[i]);
     {%- if solver_options.hessian_approx == "EXACT" %}
-        external_function_param_casadi_free(&capsule->impl_dae_hess[i]);
+        external_function_param_{{ model.dyn_ext_fun_type }}_free(&capsule->impl_dae_hess[i]);
     {%- endif %}
     }
     free(capsule->impl_dae_fun);
@@ -2306,8 +2323,8 @@ int {{ model.name }}_acados_free({{ model.name }}_solver_capsule* capsule)
 {%- elif solver_options.integrator_type == "LIFTED_IRK" %}
     for (int i = 0; i < N; i++)
     {
-        external_function_param_casadi_free(&capsule->impl_dae_fun[i]);
-        external_function_param_casadi_free(&capsule->impl_dae_fun_jac_x_xdot_u[i]);
+        external_function_param_{{ model.dyn_ext_fun_type }}_free(&capsule->impl_dae_fun[i]);
+        external_function_param_{{ model.dyn_ext_fun_type }}_free(&capsule->impl_dae_fun_jac_x_xdot_u[i]);
     }
     free(capsule->impl_dae_fun);
     free(capsule->impl_dae_fun_jac_x_xdot_u);
@@ -2470,8 +2487,13 @@ void {{ model.name }}_acados_print_stats({{ model.name }}_solver_capsule* capsul
 
     int nrow = sqp_iter+1 < stat_m ? sqp_iter+1 : stat_m;
 
+    printf("iter\tres_stat\tres_eq\t\tres_ineq\tres_comp\tqp_stat\tqp_iter\talpha");
+    if (stat_n > 8)
+        printf("\t\tqp_res_stat\tqp_res_eq\tqp_res_ineq\tqp_res_comp");
+    printf("\n");
+
 {%- if solver_options.nlp_solver_type == "SQP" %}
-    printf("iter\tres_stat\tres_eq\t\tres_ineq\tres_comp\tqp_stat\tqp_iter\talpha\n");
+
     for (int i = 0; i < nrow; i++)
     {
         for (int j = 0; j < stat_n + 1; j++)
