@@ -49,11 +49,12 @@ from .generate_c_code_discrete_dynamics import generate_c_code_discrete_dynamics
 from .generate_c_code_constraint import generate_c_code_constraint
 from .generate_c_code_nls_cost import generate_c_code_nls_cost
 from .generate_c_code_external_cost import generate_c_code_external_cost
+from .gnsf.detect_gnsf_structure import detect_gnsf_structure
 from .acados_ocp import AcadosOcp
 from .acados_model import acados_model_strip_casadi_symbolics
 from .utils import is_column, is_empty, casadi_length, render_template,\
      format_class_dict, ocp_check_against_layout, np_array_to_list, make_model_consistent,\
-     set_up_imported_gnsf_model, get_ocp_nlp_layout, get_python_interface_path
+     set_up_imported_gnsf_model, get_ocp_nlp_layout, get_python_interface_path, get_lib_ext
 from .builders import CMakeBuilder
 
 
@@ -213,16 +214,13 @@ def make_ocp_dims_consistent(acados_ocp):
 
     ## constraints
     # initial
-    if (constraints.lbx_0 == [] and constraints.ubx_0 == []):
-        dims.nbx_0 = 0
-    else:
-        this_shape = constraints.lbx_0.shape
-        other_shape = constraints.ubx_0.shape
-        if not this_shape == other_shape:
-            raise Exception('lbx_0, ubx_0 have different shapes!')
-        if not is_column(constraints.lbx_0):
-            raise Exception('lbx_0, ubx_0 must be column vectors!')
-        dims.nbx_0 = constraints.lbx_0.size
+    this_shape = constraints.lbx_0.shape
+    other_shape = constraints.ubx_0.shape
+    if not this_shape == other_shape:
+        raise Exception('lbx_0, ubx_0 have different shapes!')
+    if not is_column(constraints.lbx_0):
+        raise Exception('lbx_0, ubx_0 must be column vectors!')
+    dims.nbx_0 = constraints.lbx_0.size
 
     if all(constraints.lbx_0 == constraints.ubx_0) and dims.nbx_0 == dims.nx \
         and dims.nbxe_0 is None \
@@ -827,7 +825,7 @@ class AcadosOcpSolver:
         dlclose.argtypes = [c_void_p]
 
     @classmethod
-    def generate(cls, acados_ocp, json_file='acados_ocp_nlp.json', simulink_opts=None, cmake_builder: CMakeBuilder = None):
+    def generate(cls, acados_ocp: AcadosOcp, json_file='acados_ocp_nlp.json', simulink_opts=None, cmake_builder: CMakeBuilder = None):
         """
         Generates the code for an acados OCP solver, given the description in acados_ocp.
             :param acados_ocp: type AcadosOcp - description of the OCP for acados
@@ -849,7 +847,10 @@ class AcadosOcpSolver:
 
         # module dependent post processing
         if acados_ocp.solver_options.integrator_type == 'GNSF':
-            set_up_imported_gnsf_model(acados_ocp)
+            if 'gnsf_model' in acados_ocp.__dict__:
+                set_up_imported_gnsf_model(acados_ocp)
+            else:
+                detect_gnsf_structure(acados_ocp)
 
         if acados_ocp.solver_options.qp_solver == 'PARTIAL_CONDENSING_QPDUNES':
             remove_x0_elimination(acados_ocp)
@@ -861,11 +862,11 @@ class AcadosOcpSolver:
         ocp_generate_external_functions(acados_ocp, model)
 
         # dump to json
+        acados_ocp.json_file = json_file
         ocp_formulation_json_dump(acados_ocp, simulink_opts, json_file)
 
         # render templates
         ocp_render_templates(acados_ocp, json_file, cmake_builder=cmake_builder)
-        acados_ocp.json_file = json_file
 
 
     @classmethod
@@ -879,7 +880,7 @@ class AcadosOcpSolver:
                    `MS Visual Studio`); default: `None`
         """
         code_export_dir = os.path.abspath(code_export_dir)
-        cwd=os.getcwd()
+        cwd = os.getcwd()
         os.chdir(code_export_dir)
         if with_cython:
             os.system('make clean_ocp_cython')
@@ -938,11 +939,9 @@ class AcadosOcpSolver:
 
         # prepare library loading
         lib_prefix = 'lib'
-        lib_ext = '.so'
+        lib_ext = get_lib_ext()
         if os.name == 'nt':
             lib_prefix = ''
-            lib_ext = ''
-        # ToDo: check for mac
 
         # Load acados library to avoid unloading the library.
         # This is necessary if acados was compiled with OpenMP, since the OpenMP threads can't be destroyed.
@@ -976,6 +975,8 @@ class AcadosOcpSolver:
         getattr(self.shared_lib, f"{self.model_name}_acados_create").restype = c_int
         assert getattr(self.shared_lib, f"{self.model_name}_acados_create")(self.capsule)==0
         self.solver_created = True
+
+        self.acados_ocp = acados_ocp
 
         # get pointers solver
         self.__get_pointers_solver()
@@ -1182,18 +1183,17 @@ class AcadosOcpSolver:
         field = field_
 
         if (field_ not in all_fields):
-            raise Exception('AcadosOcpSolver.get(): {} is an invalid argument.\
-                    \n Possible values are {}.'.format(field_, all_fields))
+            raise Exception(f'AcadosOcpSolver.get(stage={stage_}, field={field_}): \'{field_}\' is an invalid argument.\
+                    \n Possible values are {all_fields}.')
 
         if not isinstance(stage_, int):
-            raise Exception('AcadosOcpSolver.get(): stage index must be Integer.')
+            raise Exception(f'AcadosOcpSolver.get(stage={stage_}, field={field_}): stage index must be an integer, got type {type(stage_)}.')
 
         if stage_ < 0 or stage_ > self.N:
-            raise Exception('AcadosOcpSolver.get(): stage index must be in [0, N], got: {}.'.format(stage_))
+            raise Exception(f'AcadosOcpSolver.get(stage={stage_}, field={field_}): stage index must be in [0, {self.N}], got: {stage_}.')
 
         if stage_ == self.N and field_ == 'pi':
-            raise Exception('AcadosOcpSolver.get(): field {} does not exist at final stage {}.'\
-                .format(field_, stage_))
+            raise Exception(f'AcadosOcpSolver.get(stage={stage_}, field={field_}): field \'{field_}\' does not exist at final stage {stage_}.')
 
         if field_ in sens_fields:
             field = field_.replace('sens_', '')
@@ -1291,16 +1291,22 @@ class AcadosOcpSolver:
         # get iterate:
         solution = dict()
 
+        lN = len(str(self.N+1))
         for i in range(self.N+1):
-            solution['x_'+str(i)] = self.get(i,'x')
-            solution['u_'+str(i)] = self.get(i,'u')
-            solution['z_'+str(i)] = self.get(i,'z')
-            solution['lam_'+str(i)] = self.get(i,'lam')
-            solution['t_'+str(i)] = self.get(i, 't')
-            solution['sl_'+str(i)] = self.get(i, 'sl')
-            solution['su_'+str(i)] = self.get(i, 'su')
-        for i in range(self.N):
-            solution['pi_'+str(i)] = self.get(i,'pi')
+            i_string = f'{i:0{lN}d}'
+            solution['x_'+i_string] = self.get(i,'x')
+            solution['u_'+i_string] = self.get(i,'u')
+            solution['z_'+i_string] = self.get(i,'z')
+            solution['lam_'+i_string] = self.get(i,'lam')
+            solution['t_'+i_string] = self.get(i, 't')
+            solution['sl_'+i_string] = self.get(i, 'sl')
+            solution['su_'+i_string] = self.get(i, 'su')
+            if i < self.N:
+                solution['pi_'+i_string] = self.get(i,'pi')
+
+        for k in list(solution.keys()):
+            if len(solution[k]) == 0:
+                del solution[k]
 
         # save
         with open(filename, 'w') as f:
@@ -1419,7 +1425,7 @@ class AcadosOcpSolver:
             return self.get_residuals()
 
         else:
-            raise Exception(f'AcadosOcpSolver.get_stats(): {field} is not a valid argument.'
+            raise Exception(f'AcadosOcpSolver.get_stats(): \'{field}\' is not a valid argument.'
                     + f'\n Possible values are {fields}.')
 
 
@@ -1521,9 +1527,8 @@ class AcadosOcpSolver:
             assert getattr(self.shared_lib, f"{self.model_name}_acados_update_params")(self.capsule, stage, value_data, value_.shape[0])==0
         else:
             if field_ not in constraints_fields + cost_fields + out_fields:
-                raise Exception("AcadosOcpSolver.set(): {} is not a valid argument.\
-                    \nPossible values are {}.".format(field, \
-                    constraints_fields + cost_fields + out_fields + ['p']))
+                raise Exception(f"AcadosOcpSolver.set(): '{field}' is not a valid argument.\n"
+                    f" Possible values are {constraints_fields + cost_fields + out_fields + ['p']}.")
 
             self.shared_lib.ocp_nlp_dims_get_from_attr.argtypes = \
                 [c_void_p, c_void_p, c_void_p, c_int, c_char_p]
@@ -1533,8 +1538,8 @@ class AcadosOcpSolver:
                 self.nlp_dims, self.nlp_out, stage_, field)
 
             if value_.shape[0] != dims:
-                msg = 'AcadosOcpSolver.set(): mismatching dimension for field "{}" '.format(field_)
-                msg += 'with dimension {} (you have {})'.format(dims, value_.shape[0])
+                msg = f'AcadosOcpSolver.set(): mismatching dimension for field "{field_}" '
+                msg += f'with dimension {dims} (you have {value_.shape[0]})'
                 raise Exception(msg)
 
             value_data = cast(value_.ctypes.data, POINTER(c_double))
@@ -1602,7 +1607,7 @@ class AcadosOcpSolver:
                     raise Exception("Ambiguity in API detected.\n"
                                     "Are you making an acados model from scrach? Add api='new' to cost_set and carry on.\n"
                                     "Are you seeing this error suddenly in previously running code? Read on.\n"
-                                    "  You are relying on a now-fixed bug in cost_set for field '{}'.\n".format(field_) +
+                                    f"  You are relying on a now-fixed bug in cost_set for field '{field_}'.\n" +
                                     "  acados_template now correctly passes on any matrices to acados in column major format.\n" +
                                     "  Two options to fix this error: \n" +
                                     "   * Add api='old' to cost_set to restore old incorrect behaviour\n" +
@@ -1670,7 +1675,7 @@ class AcadosOcpSolver:
                     raise Exception("Ambiguity in API detected.\n"
                                     "Are you making an acados model from scrach? Add api='new' to constraints_set and carry on.\n"
                                     "Are you seeing this error suddenly in previously running code? Read on.\n"
-                                    "  You are relying on a now-fixed bug in constraints_set for field '{}'.\n".format(field_) +
+                                    f"  You are relying on a now-fixed bug in constraints_set for field '{field}'.\n" +
                                     "  acados_template now correctly passes on any matrices to acados in column major format.\n" +
                                     "  Two options to fix this error: \n" +
                                     "   * Add api='old' to constraints_set to restore old incorrect behaviour\n" +
@@ -1683,7 +1688,7 @@ class AcadosOcpSolver:
                 # Get elements in column major order
                 value_ = np.ravel(value_, order='F')
             else:
-                raise Exception("Unknown api: '{}'".format(api))
+                raise Exception(f"Unknown api: '{api}'")
 
         if value_shape != tuple(dims):
             raise Exception(f'AcadosOcpSolver.constraints_set(): mismatching dimension' +
@@ -1705,7 +1710,7 @@ class AcadosOcpSolver:
         Get numerical data from the dynamics module of the solver:
 
             :param stage: integer corresponding to shooting node
-            :param field: string, e.g. 'A'
+            :param field: string, e.g., 'A'
         """
 
         field = field_
@@ -1755,32 +1760,34 @@ class AcadosOcpSolver:
             - qp_mu0: for HPIPM QP solvers: initial value for complementarity slackness
             - warm_start_first_qp: indicates if first QP in SQP is warm_started
         """
-        int_fields = ['print_level', 'rti_phase', 'initialize_t_slacks', 'qp_warm_start', 'line_search_use_sufficient_descent', 'full_step_dual', 'globalization_use_SOC', 'warm_start_first_qp']
-        double_fields = ['step_length', 'tol_eq', 'tol_stat', 'tol_ineq', 'tol_comp', 'alpha_min', 'alpha_reduction', 'eps_sufficient_descent',
-        'qp_tol_stat', 'qp_tol_eq', 'qp_tol_ineq', 'qp_tol_comp', 'qp_tau_min', 'qp_mu0']
+        int_fields = ['print_level', 'rti_phase', 'initialize_t_slacks', 'qp_warm_start',
+                      'line_search_use_sufficient_descent', 'full_step_dual', 'globalization_use_SOC', 'warm_start_first_qp']
+        double_fields = ['step_length', 'tol_eq', 'tol_stat', 'tol_ineq', 'tol_comp', 'alpha_min', 'alpha_reduction',
+                         'eps_sufficient_descent', 'qp_tol_stat', 'qp_tol_eq', 'qp_tol_ineq', 'qp_tol_comp', 'qp_tau_min', 'qp_mu0']
         string_fields = ['globalization']
 
         # check field availability and type
         if field_ in int_fields:
             if not isinstance(value_, int):
-                raise Exception('solver option {} must be of type int. You have {}.'.format(field_, type(value_)))
+                raise Exception(f'solver option \'{field_}\' must be of type int. You have {type(value_)}.')
             else:
                 value_ctypes = c_int(value_)
 
         elif field_ in double_fields:
             if not isinstance(value_, float):
-                raise Exception('solver option {} must be of type float. You have {}.'.format(field_, type(value_)))
+                raise Exception(f'solver option \'{field_}\' must be of type float. You have {type(value_)}.')
             else:
                 value_ctypes = c_double(value_)
 
         elif field_ in string_fields:
             if not isinstance(value_, str):
-                raise Exception('solver option {} must be of type str. You have {}.'.format(field_, type(value_)))
+                raise Exception(f'solver option \'{field_}\' must be of type str. You have {type(value_)}.')
             else:
                 value_ctypes = value_.encode('utf-8')
         else:
-            raise Exception('AcadosOcpSolver.options_set() does not support field {}.'\
-                '\n Possible values are {}.'.format(field_, ', '.join(int_fields + double_fields + string_fields)))
+            fields = ', '.join(int_fields + double_fields + string_fields)
+            raise Exception(f'AcadosOcpSolver.options_set() does not support field \'{field_}\'.\n'\
+                f' Possible values are {fields}.')
 
 
         if field_ == 'rti_phase':
@@ -1809,6 +1816,44 @@ class AcadosOcpSolver:
         return
 
 
+    def set_params_sparse(self, stage_, idx_values_, param_values_):
+        """
+        set parameters of the solvers external function partially:
+        Pseudo: solver.param[idx_values_] = param_values_;
+        Parameters:
+            :param stage_: integer corresponding to shooting node
+            :param idx_values_: 0 based np array (or iterable) of integers: indices of parameter to be set
+            :param param_values_: new parameter values as numpy array
+        """
+
+        # if not isinstance(idx_values_, np.ndarray) or not issubclass(type(idx_values_[0]), np.integer):
+        #     raise Exception('idx_values_ must be np.array of integers.')
+
+        if not isinstance(param_values_, np.ndarray):
+            raise Exception('param_values_ must be np.array.')
+        elif np.float64 != param_values_.dtype:
+            raise TypeError('param_values_ must be np.array of float64.')
+
+        if param_values_.shape[0] != len(idx_values_):
+            raise Exception(f'param_values_ and idx_values_ must be of the same size.' +
+                 f' Got sizes idx {param_values_.shape[0]}, param_values {len(idx_values_)}.')
+
+        if any(idx_values_ >= self.acados_ocp.dims.np):
+            raise Exception(f'idx_values_ contains value >= np = {self.acados_ocp.dims.np}')
+
+        stage = c_int(stage_)
+        n_update = c_int(len(param_values_))
+
+        param_data = cast(param_values_.ctypes.data, POINTER(c_double))
+        c_idx_values = np.ascontiguousarray(idx_values_, dtype=np.intc)
+        idx_data = cast(c_idx_values.ctypes.data, POINTER(c_int))
+
+        getattr(self.shared_lib, f"{self.model_name}_acados_update_params_sparse").argtypes = \
+                        [c_void_p, c_int, POINTER(c_int), POINTER(c_double), c_int]
+        getattr(self.shared_lib, f"{self.model_name}_acados_update_params_sparse").restype = c_int
+        getattr(self.shared_lib, f"{self.model_name}_acados_update_params_sparse") \
+                                    (self.capsule, stage, idx_data, param_data, n_update)
+
     def __del__(self):
         if self.solver_created:
             getattr(self.shared_lib, f"{self.model_name}_acados_free").argtypes = [c_void_p]
@@ -1822,4 +1867,6 @@ class AcadosOcpSolver:
             try:
                 self.dlclose(self.shared_lib._handle)
             except:
+                print(f"WARNING: acados Python interface could not close shared_lib handle of AcadosOcpSolver {self.model_name}.\n",
+                     "Attempting to create a new one with the same name will likely result in the old one being used!")
                 pass

@@ -6,6 +6,12 @@
         "str"
     ],
     "cython_include_dirs": [
+        "list"
+    ],
+    "json_file": [
+        "str"
+    ],
+    "shared_lib_ext": [
         "str"
     ],
     "model": {
@@ -743,6 +749,9 @@
         "sim_method_newton_iter": [
             "int"
         ],
+        "sim_method_newton_tol": [
+            "float"
+        ],
         "sim_method_jac_reuse": [
             "ndarray",
             [
@@ -811,6 +820,9 @@
         ],
         "ext_cost_num_hess": [
             "int"
+        ],
+        "ext_fun_compile_flags": [
+            "str"
         ],
         "model_external_shared_lib_dir": [
             "str"

@@ -118,11 +118,16 @@ def is_empty(x):
             return True
         else:
             return False
-    elif x == None or x == []:
+    elif x == None:
         return True
+    elif isinstance(x, (set, list)):
+        if len(x)==0:
+            return True
+        else:
+            return False
     else:
         raise Exception("is_empty expects one of the following types: casadi.MX, casadi.SX, "
-                        + "None, numpy array empty list. Got: " + str(type(x)))
+                        + "None, numpy array empty list, set. Got: " + str(type(x)))
 
 
 def casadi_length(x):
@@ -155,6 +160,14 @@ def make_model_consistent(model):
 
     return model
 
+def get_lib_ext():
+    lib_ext = '.so'
+    if sys.platform == 'darwin':
+        lib_ext = '.dylib'
+    elif os.name == 'nt':
+        lib_ext = ''
+
+    return lib_ext
 
 def get_tera():
     tera_path = get_tera_exec_path()
@@ -284,15 +297,16 @@ def ocp_check_against_layout_recursion(ocp_nlp, ocp_dims, layout):
             layout_of_key = layout[key]
         except KeyError:
             raise Exception("ocp_check_against_layout_recursion: field" \
-                            " '{0}' is not in layout but in OCP description.".format(key))
+                            f" '{key}' is not in layout but in OCP description.")
 
         if isinstance(item, dict):
             ocp_check_against_layout_recursion(item, ocp_dims, layout_of_key)
 
         if 'ndarray' in layout_of_key:
+            # cast to np array
             if isinstance(item, int) or isinstance(item, float):
                 item = np.array([item])
-        if isinstance(item, (list, np.ndarray)) and (layout_of_key[0] != 'str'):
+        if isinstance(item, np.ndarray) and (layout_of_key[0] != 'str'):
             dim_layout = []
             dim_names = layout_of_key[1]
 
@@ -301,19 +315,16 @@ def ocp_check_against_layout_recursion(ocp_nlp, ocp_dims, layout):
 
             dims = tuple(dim_layout)
 
-            item = np.array(item)
             item_dims = item.shape
             if len(item_dims) != len(dims):
-                raise Exception('Mismatching dimensions for field {0}. ' \
-                    'Expected {1} dimensional array, got {2} dimensional array.' \
-                        .format(key, len(dims), len(item_dims)))
+                raise Exception(f'Mismatching dimensions for field "{key}". ' \
+                    f'Expected {len(dims)} dimensional array, got {len(item_dims)} dimensional array.')
 
             if np.prod(item_dims) != 0 or np.prod(dims) != 0:
                 if dims != item_dims:
-                    raise Exception('acados -- mismatching dimensions for field {0}. ' \
-                        'Provided data has dimensions {1}, ' \
-                        'while associated dimensions {2} are {3}' \
-                            .format(key, item_dims, dim_names, dims))
+                    raise Exception(f'acados -- mismatching dimensions for field "{key}". ' \
+                        f'Provided data has dimensions {item_dims}, ' \
+                        f'while associated dimensions {dim_names} are {dims}')
     return
 
 
@@ -380,9 +391,9 @@ def acados_dae_model_json_dump(model):
     print("dumped ", model_name, " dae to file:", json_file, "\n")
 
 
-def set_up_imported_gnsf_model(acados_formulation):
+def set_up_imported_gnsf_model(acados_ocp):
 
-    gnsf = acados_formulation.gnsf_model
+    gnsf = acados_ocp.gnsf_model
 
     # check CasADi version
     # dump_casadi_version = gnsf['casadi_version']
@@ -402,39 +413,66 @@ def set_up_imported_gnsf_model(acados_formulation):
 
     # obtain gnsf dimensions
     size_gnsf_A = get_matrices_fun.size_out(0)
-    acados_formulation.dims.gnsf_nx1 = size_gnsf_A[1]
-    acados_formulation.dims.gnsf_nz1 = size_gnsf_A[0] - size_gnsf_A[1]
-    acados_formulation.dims.gnsf_nuhat = max(phi_fun.size_in(1))
-    acados_formulation.dims.gnsf_ny = max(phi_fun.size_in(0))
-    acados_formulation.dims.gnsf_nout = max(phi_fun.size_out(0))
+    acados_ocp.dims.gnsf_nx1 = size_gnsf_A[1]
+    acados_ocp.dims.gnsf_nz1 = size_gnsf_A[0] - size_gnsf_A[1]
+    acados_ocp.dims.gnsf_nuhat = max(phi_fun.size_in(1))
+    acados_ocp.dims.gnsf_ny = max(phi_fun.size_in(0))
+    acados_ocp.dims.gnsf_nout = max(phi_fun.size_out(0))
 
     # save gnsf functions in model
-    acados_formulation.model.phi_fun = phi_fun
-    acados_formulation.model.phi_fun_jac_y = phi_fun_jac_y
-    acados_formulation.model.phi_jac_y_uhat = phi_jac_y_uhat
-    acados_formulation.model.get_matrices_fun = get_matrices_fun
+    acados_ocp.model.phi_fun = phi_fun
+    acados_ocp.model.phi_fun_jac_y = phi_fun_jac_y
+    acados_ocp.model.phi_jac_y_uhat = phi_jac_y_uhat
+    acados_ocp.model.get_matrices_fun = get_matrices_fun
 
     # get_matrices_fun = Function([model_name,'_gnsf_get_matrices_fun'], {dummy},...
     #  {A, B, C, E, L_x, L_xdot, L_z, L_u, A_LO, c, E_LO, B_LO,...
     #   nontrivial_f_LO, purely_linear, ipiv_x, ipiv_z, c_LO});
     get_matrices_out = get_matrices_fun(0)
-    acados_formulation.model.gnsf['nontrivial_f_LO'] = int(get_matrices_out[12])
-    acados_formulation.model.gnsf['purely_linear'] = int(get_matrices_out[13])
+    acados_ocp.model.gnsf['nontrivial_f_LO'] = int(get_matrices_out[12])
+    acados_ocp.model.gnsf['purely_linear'] = int(get_matrices_out[13])
 
     if "f_lo_fun_jac_x1k1uz" in gnsf:
         f_lo_fun_jac_x1k1uz = Function.deserialize(gnsf['f_lo_fun_jac_x1k1uz'])
-        acados_formulation.model.f_lo_fun_jac_x1k1uz = f_lo_fun_jac_x1k1uz
+        acados_ocp.model.f_lo_fun_jac_x1k1uz = f_lo_fun_jac_x1k1uz
     else:
-        dummy_var_x1 = SX.sym('dummy_var_x1', acados_formulation.dims.gnsf_nx1)
-        dummy_var_x1dot = SX.sym('dummy_var_x1dot', acados_formulation.dims.gnsf_nx1)
-        dummy_var_z1 = SX.sym('dummy_var_z1', acados_formulation.dims.gnsf_nz1)
-        dummy_var_u = SX.sym('dummy_var_z1', acados_formulation.dims.nu)
-        dummy_var_p = SX.sym('dummy_var_z1', acados_formulation.dims.np)
+        dummy_var_x1 = SX.sym('dummy_var_x1', acados_ocp.dims.gnsf_nx1)
+        dummy_var_x1dot = SX.sym('dummy_var_x1dot', acados_ocp.dims.gnsf_nx1)
+        dummy_var_z1 = SX.sym('dummy_var_z1', acados_ocp.dims.gnsf_nz1)
+        dummy_var_u = SX.sym('dummy_var_z1', acados_ocp.dims.nu)
+        dummy_var_p = SX.sym('dummy_var_z1', acados_ocp.dims.np)
         empty_var = SX.sym('empty_var', 0, 0)
 
         empty_fun = Function('empty_fun', \
             [dummy_var_x1, dummy_var_x1dot, dummy_var_z1, dummy_var_u, dummy_var_p],
                 [empty_var])
-        acados_formulation.model.f_lo_fun_jac_x1k1uz = empty_fun
+        acados_ocp.model.f_lo_fun_jac_x1k1uz = empty_fun
 
-    del acados_formulation.gnsf_model
+    del acados_ocp.gnsf_model
+
+
+def idx_perm_to_ipiv(idx_perm):
+    n = len(idx_perm)
+    vec = list(range(n))
+    ipiv = np.zeros(n)
+
+    print(n, idx_perm)
+    # import pdb; pdb.set_trace()
+    for ii in range(n):
+        idx0 = idx_perm[ii]
+        for jj in range(ii,n):
+            if vec[jj]==idx0:
+                idx1 = jj
+                break
+        tmp = vec[ii]
+        vec[ii] = vec[idx1]
+        vec[idx1] = tmp
+        ipiv[ii] = idx1
+
+    ipiv = ipiv-1 # C 0-based indexing
+    return ipiv
+
+
+def print_casadi_expression(f):
+    for ii in range(casadi_length(f)):
+        print(f[ii,:])

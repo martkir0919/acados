@@ -133,6 +133,9 @@ COMPDEFINES = [ COMPDEFINES, ' -DACADOS_WITH_OSQP ' ];
 {%- elif solver_options.qp_solver is containing("QPDUNES") %}
 CFLAGS = [ CFLAGS, ' -DACADOS_WITH_QPDUNES ' ];
 COMPDEFINES = [ COMPDEFINES, ' -DACADOS_WITH_QPDUNES ' ];
+{%- elif solver_options.qp_solver is containing("DAQP") %}
+CFLAGS = [ CFLAGS, ' -DACADOS_WITH_DAQP' ];
+COMPDEFINES = [ COMPDEFINES, ' -DACADOS_WITH_DAQP' ];
 {%- elif solver_options.qp_solver is containing("HPMPC") %}
 CFLAGS = [ CFLAGS, ' -DACADOS_WITH_HPMPC ' ];
 COMPDEFINES = [ COMPDEFINES, ' -DACADOS_WITH_HPMPC ' ];
@@ -153,11 +156,23 @@ LIBS{end+1} = '{{ acados_link_libs.osqp }}';
     {% if solver_options.qp_solver is containing("QPOASES") %}
 LIBS{end+1} = '-lqpOASES_e';
     {% endif %}
+    {% if solver_options.qp_solver is containing("DAQP") %}
+LIBS{end+1} = '-ldaqp';
+    {% endif %}
 {%- endif %}
 
-mex('-v', '-O', CFLAGS, LDFLAGS, COMPFLAGS, COMPDEFINES, INCS{:}, ...
-    LIB_PATH, LIBS{:}, SOURCES{:}, ...
-    '-output', 'acados_solver_sfunction_{{ model.name }}' );
+
+try
+    %     mex('-v', '-O', CFLAGS, LDFLAGS, COMPFLAGS, COMPDEFINES, INCS{:}, ...
+    mex('-O', CFLAGS, LDFLAGS, COMPFLAGS, COMPDEFINES, INCS{:}, ...
+            LIB_PATH, LIBS{:}, SOURCES{:}, ...
+            '-output', 'acados_solver_sfunction_{{ model.name }}' );
+catch exception
+    disp('make_sfun failed with the following exception:')
+    disp(exception);
+    disp('Try adding -v to the mex command above to get more information.')
+    keyboard
+end
 
 fprintf( [ '\n\nSuccessfully created sfunction:\nacados_solver_sfunction_{{ model.name }}', '.', ...
     eval('mexext')] );
@@ -232,20 +247,29 @@ i_in = i_in + 1;
 {%- endif -%}
 
 {%- if dims.ng > 0 and simulink_opts.inputs.lg -%}  {#- lg #}
-input_note = strcat(input_note, num2str(i_in), ') lg, size [{{ dims.ng }}]\n ');
+input_note = strcat(input_note, num2str(i_in), ') lg for shooting nodes 0 to N-1, size [{{ dims.N*dims.ng }}]\n ');
 i_in = i_in + 1;
 {%- endif %}
 {%- if dims.ng > 0 and simulink_opts.inputs.ug -%}  {#- ug #}
-input_note = strcat(input_note, num2str(i_in), ') ug, size [{{ dims.ng }}]\n ');
+input_note = strcat(input_note, num2str(i_in), ') ug for shooting nodes 0 to N-1, size [{{ dims.N*dims.ng }}]\n ');
 i_in = i_in + 1;
 {%- endif %}
 
 {%- if dims.nh > 0 and simulink_opts.inputs.lh -%}  {#- lh #}
-input_note = strcat(input_note, num2str(i_in), ') lh, size [{{ dims.nh }}]\n ');
+input_note = strcat(input_note, num2str(i_in), ') lh for shooting nodes 0 to N-1, size [{{ dims.N*dims.nh }}]\n ');
 i_in = i_in + 1;
 {%- endif %}
 {%- if dims.nh > 0 and simulink_opts.inputs.uh -%}  {#- uh #}
-input_note = strcat(input_note, num2str(i_in), ') uh, size [{{ dims.nh }}]\n ');
+input_note = strcat(input_note, num2str(i_in), ') uh for shooting nodes 0 to N-1, size [{{ dims.N*dims.nh }}]\n ');
+i_in = i_in + 1;
+{%- endif %}
+
+{%- if dims.nh_e > 0 and simulink_opts.inputs.lh_e -%}  {#- lh_e #}
+input_note = strcat(input_note, num2str(i_in), ') lh_e, size [{{ dims.nh_e }}]\n ');
+i_in = i_in + 1;
+{%- endif %}
+{%- if dims.nh_e > 0 and simulink_opts.inputs.uh_e -%}  {#- uh_e #}
+input_note = strcat(input_note, num2str(i_in), ') uh_e, size [{{ dims.nh_e }}]\n ');
 i_in = i_in + 1;
 {%- endif %}
 

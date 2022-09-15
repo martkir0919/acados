@@ -496,7 +496,8 @@ int ocp_nlp_sqp(void *config_, void *dims_, void *nlp_in_, void *nlp_out_,
     mem->time_sim_ad = 0.0;
 
     int N = dims->N;
-    int ii, qp_iter, qp_status;
+    int ii, qp_status;
+    int qp_iter = 0;
     double alpha;
 
 #if defined(ACADOS_WITH_OPENMP)
@@ -576,9 +577,9 @@ int ocp_nlp_sqp(void *config_, void *dims_, void *nlp_in_, void *nlp_out_,
 
             if (nlp_opts->print_level > 0)
             {
-                printf("%i\t%e\t%e\t%e\t%e.\n", sqp_iter, nlp_res->inf_norm_res_stat,
-                    nlp_res->inf_norm_res_eq, nlp_res->inf_norm_res_ineq,
-                    nlp_res->inf_norm_res_comp );
+                printf("%i\t%e\t%e\t%e\t%e\t%d\t%d\t%e\n", sqp_iter, nlp_res->inf_norm_res_stat,
+                    nlp_res->inf_norm_res_eq, nlp_res->inf_norm_res_ineq, nlp_res->inf_norm_res_comp,
+                    qp_status, qp_iter, alpha);
                 printf("\n\n");
             }
 
@@ -613,14 +614,16 @@ int ocp_nlp_sqp(void *config_, void *dims_, void *nlp_in_, void *nlp_out_,
                                          "warm_start", &tmp_int);
         }
 
-        if (0) // DEBUG printing
+#if defined(ACADOS_DEBUG_SQP_PRINT_QPS_TO_FILE)
+        if (1) // DEBUG printing
         {
             char filename[100];
-            sprintf(filename, "qp_prints/qp_in_%d.txt", sqp_iter);
+            sprintf(filename, "qp_in_%d.txt", sqp_iter);
             FILE *out_file = fopen(filename, "w");
             print_ocp_qp_in_to_file(out_file, qp_in);
             fclose(out_file);
         }
+#endif
         // solve qp
         acados_tic(&timer1);
         qp_status = qp_solver->evaluate(qp_solver, dims->qp_solver, qp_in, qp_out,
@@ -651,14 +654,16 @@ int ocp_nlp_sqp(void *config_, void *dims_, void *nlp_in_, void *nlp_out_,
             print_ocp_qp_out(qp_out);
         }
 
-        if (0) // DEBUG printing
+#if defined(ACADOS_DEBUG_SQP_PRINT_QPS_TO_FILE)
+        if (1) // DEBUG printing
         {
             char filename[100];
-            sprintf(filename, "qp_prints/qp_out_%d.txt", sqp_iter);
+            sprintf(filename, "qp_out_%d.txt", sqp_iter);
             FILE *out_file = fopen(filename, "w");
             print_ocp_qp_out_to_file(out_file, qp_out);
             fclose(out_file);
         }
+#endif
 
         // TODO move into QP solver memory ???
         qp_info *qp_info_;
@@ -850,14 +855,17 @@ int ocp_nlp_sqp(void *config_, void *dims_, void *nlp_in_, void *nlp_out_,
                     printf("\n\nSQP: SOC ocp_qp_in at iteration %d\n", sqp_iter);
                     print_ocp_qp_in(qp_in);
                 }
-                if (0) // DEBUG printing
+
+#if defined(ACADOS_DEBUG_SQP_PRINT_QPS_TO_FILE)
+                if (1) // DEBUG printing
                 {
                     char filename[100];
-                    sprintf(filename, "qp_prints/qp_in_%d_SOC.txt", sqp_iter);
+                    sprintf(filename, "qp_in_%d_SOC.txt", sqp_iter);
                     FILE *out_file = fopen(filename, "w");
                     print_ocp_qp_in_to_file(out_file, qp_in);
                     fclose(out_file);
                 }
+#endif
 
                 // solve QP
                 // acados_tic(&timer1);
@@ -901,14 +909,16 @@ int ocp_nlp_sqp(void *config_, void *dims_, void *nlp_in_, void *nlp_out_,
                     printf("\n\nSQP: SOC ocp_qp_out at iteration %d\n", sqp_iter);
                     print_ocp_qp_out(qp_out);
                 }
-                if (0) // DEBUG printing
+#if defined(ACADOS_DEBUG_SQP_PRINT_QPS_TO_FILE)
+                if (1) // DEBUG printing
                 {
                     char filename[100];
-                    sprintf(filename, "qp_prints/qp_out_%d_SOC.txt", sqp_iter);
+                    sprintf(filename, "qp_out_%d_SOC.txt", sqp_iter);
                     FILE *out_file = fopen(filename, "w");
                     print_ocp_qp_out_to_file(out_file, qp_out);
                     fclose(out_file);
                 }
+#endif
 
                 // exit conditions on QP status
                 if ((qp_status!=ACADOS_SUCCESS) & (qp_status!=ACADOS_MAXITER))
@@ -956,10 +966,11 @@ int ocp_nlp_sqp(void *config_, void *dims_, void *nlp_in_, void *nlp_out_,
         {
             if (sqp_iter%10 == 0)
             {
-                printf("# it\tstat\t\teq\t\tineq\t\tcomp\n");
+                printf("# it\tstat\t\teq\t\tineq\t\tcomp\t\tqp_stat\tqp_iter\talpha\n");
             }
-            printf("%i\t%e\t%e\t%e\t%e.\n", sqp_iter, nlp_res->inf_norm_res_stat,
-                nlp_res->inf_norm_res_eq, nlp_res->inf_norm_res_ineq, nlp_res->inf_norm_res_comp );
+            printf("%i\t%e\t%e\t%e\t%e\t%d\t%d\t%e\n", sqp_iter, nlp_res->inf_norm_res_stat,
+                nlp_res->inf_norm_res_eq, nlp_res->inf_norm_res_ineq, nlp_res->inf_norm_res_comp,
+                qp_status, qp_iter, alpha);
         }
 
         time_till_now = acados_toc(&timer0);

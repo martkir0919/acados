@@ -45,8 +45,10 @@ classdef acados_ocp_nlp_json < handle
         simulink_opts
         cython_include_dirs
         code_export_directory
+        json_file
+        shared_lib_ext
     end
-    methods 
+    methods
         function obj = acados_ocp_nlp_json(simulink_opts)
             obj.dims = acados_template_mex.ocp_nlp_dims_json();
             obj.cost = acados_template_mex.ocp_nlp_cost_json();
@@ -56,9 +58,14 @@ classdef acados_ocp_nlp_json < handle
             obj.acados_include_path = [];
             obj.acados_lib_path = [];
             obj.parameter_values = [];
-            obj.problem_class = "OCP";
+            obj.problem_class = 'OCP';
             obj.simulink_opts = simulink_opts;
-            obj.cython_include_dirs = "";
+            obj.cython_include_dirs = [];
+            obj.json_file = 'acados_ocp_nlp.json';
+            obj.shared_lib_ext = '.so';
+            if ismac()
+                obj.shared_lib_ext = '.dylib';
+            end
             % obj.code_export_directory;
         end
     end

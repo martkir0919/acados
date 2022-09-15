@@ -239,13 +239,13 @@ void *sim_irk_opts_assign(void *config_, void *dims, void *raw_memory)
 
     align_char_to(8, &c_ptr);
 
-    assign_and_advance_double(ns_max * ns_max, &opts->A_mat, &c_ptr);
-    assign_and_advance_double(ns_max, &opts->b_vec, &c_ptr);
-    assign_and_advance_double(ns_max, &opts->c_vec, &c_ptr);
-
     // work
     opts->work = c_ptr;
     c_ptr += butcher_tableau_work_calculate_size(ns_max);
+
+    assign_and_advance_double(ns_max * ns_max, &opts->A_mat, &c_ptr);
+    assign_and_advance_double(ns_max, &opts->b_vec, &c_ptr);
+    assign_and_advance_double(ns_max, &opts->c_vec, &c_ptr);
 
     assert((char *) raw_memory + sim_irk_opts_calculate_size(config_, dims) >= c_ptr);
 
@@ -271,6 +271,7 @@ void sim_irk_opts_initialize_default(void *config_, void *dims_, void *opts_)
     opts->exact_z_output = false;
     opts->ns = 3;
     opts->collocation_type = GAUSS_LEGENDRE;
+    opts->newton_tol = 0.0;
 
     assert(opts->ns <= NS_MAX && "ns > NS_MAX!");
 
@@ -1068,6 +1069,16 @@ int sim_irk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_, vo
             // scale and add a generic strmat into a generic strmat // K = K - rG, where rG is
             // [DeltaK, DeltaZ]
             blasfeo_daxpy(nK, -1.0, rG, 0, K, 0, K, 0);
+
+            // check early termination based on tolerance
+            if (opts->newton_tol > 0)
+            {
+                blasfeo_dvecnrm_inf(nK, rG, 0, &a);
+                if (a < opts->newton_tol)
+                {
+                    break;
+                }
+            }
         }
 
         if ( opts->sens_adj || opts->sens_hess )

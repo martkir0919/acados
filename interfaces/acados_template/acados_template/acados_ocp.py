@@ -35,7 +35,7 @@
 import numpy as np
 import os
 from .acados_model import AcadosModel
-from .utils import get_acados_path, J_to_idx, J_to_idx_slack
+from .utils import get_acados_path, J_to_idx, J_to_idx_slack, get_lib_ext
 
 class AcadosOcpDims:
     """
@@ -2124,6 +2124,7 @@ class AcadosOcpOptions:
         self.__sim_method_num_stages  = 4                     # number of stages in the integrator
         self.__sim_method_num_steps   = 1                     # number of steps in the integrator
         self.__sim_method_newton_iter = 3                     # number of Newton iterations in simulation method
+        self.__sim_method_newton_tol = 0.0
         self.__sim_method_jac_reuse = 0
         self.__qp_solver_tol_stat = None                      # QP solver stationarity tolerance
         self.__qp_solver_tol_eq   = None                      # QP solver equality tolerance
@@ -2159,15 +2160,24 @@ class AcadosOcpOptions:
         self.__full_step_dual = 0
         self.__eps_sufficient_descent = 1e-4
         self.__hpipm_mode = 'BALANCE'
+        self.__ext_fun_compile_flags = '-O2'
 
 
     @property
     def qp_solver(self):
         """QP solver to be used in the NLP solver.
-        String in ('PARTIAL_CONDENSING_HPIPM', 'FULL_CONDENSING_QPOASES', 'FULL_CONDENSING_HPIPM', 'PARTIAL_CONDENSING_QPDUNES', 'PARTIAL_CONDENSING_OSQP').
+        String in ('PARTIAL_CONDENSING_HPIPM', 'FULL_CONDENSING_QPOASES', 'FULL_CONDENSING_HPIPM', 'PARTIAL_CONDENSING_QPDUNES', 'PARTIAL_CONDENSING_OSQP', 'FULL_CONDENSING_DAQP').
         Default: 'PARTIAL_CONDENSING_HPIPM'.
         """
         return self.__qp_solver
+
+    @property
+    def ext_fun_compile_flags(self):
+        """
+        String with compiler flags for external function compilation.
+        Default: '-O2'.
+        """
+        return self.__ext_fun_compile_flags
 
     @property
     def hpipm_mode(self):
@@ -2233,6 +2243,13 @@ class AcadosOcpOptions:
         """Regularization method for the Hessian.
         String in ('NO_REGULARIZE', 'MIRROR', 'PROJECT', 'PROJECT_REDUC_HESS', 'CONVEXIFY') or :code:`None`.
 
+        - MIRROR: performs eigenvalue decomposition H = V^T D V and sets D_ii = max(eps, abs(D_ii))
+        - PROJECT: performs eigenvalue decomposition H = V^T D V and sets D_ii = max(eps, D_ii)
+        - CONVEXIFY: Algorithm 6 from Verschueren2017, https://cdn.syscop.de/publications/Verschueren2017.pdf
+        - PROJECT_REDUC_HESS: experimental
+
+        Note: default eps = 1e-4
+
         Default: :code:`None`.
         """
         return self.__regularize_method
@@ -2283,6 +2300,15 @@ class AcadosOcpOptions:
         return self.__sim_method_newton_iter
 
     @property
+    def sim_method_newton_tol(self):
+        """
+        Tolerance of Newton system in simulation method.
+        Type: float: 0.0 means not used
+        Default: 0.0
+        """
+        return self.__sim_method_newton_tol
+
+    @property
     def sim_method_jac_reuse(self):
         """
         Integer determining if jacobians are reused within integrator or ndarray of ints > 0 of shape (N,).
@@ -2331,8 +2357,11 @@ class AcadosOcpOptions:
 
     @property
     def qp_solver_warm_start(self):
-        """QP solver: Warm starting.
-        0: no warm start; 1: warm start; 2: hot start."""
+        """
+        QP solver: Warm starting.
+        0: no warm start; 1: warm start; 2: hot start.
+        Default: 0
+        """
         return self.__qp_solver_warm_start
 
     @property
@@ -2572,7 +2601,8 @@ class AcadosOcpOptions:
     def qp_solver(self, qp_solver):
         qp_solvers = ('PARTIAL_CONDENSING_HPIPM', \
                 'FULL_CONDENSING_QPOASES', 'FULL_CONDENSING_HPIPM', \
-                'PARTIAL_CONDENSING_QPDUNES', 'PARTIAL_CONDENSING_OSQP')
+                'PARTIAL_CONDENSING_QPDUNES', 'PARTIAL_CONDENSING_OSQP', \
+                'FULL_CONDENSING_DAQP')
         if qp_solver in qp_solvers:
             self.__qp_solver = qp_solver
         else:
@@ -2606,6 +2636,13 @@ class AcadosOcpOptions:
         else:
             raise Exception('Invalid hpipm_mode value. Possible values are:\n\n' \
                     + ',\n'.join(hpipm_modes) + '.\n\nYou have: ' + hpipm_mode + '.\n\n')
+
+    @ext_fun_compile_flags.setter
+    def ext_fun_compile_flags(self, ext_fun_compile_flags):
+        if isinstance(ext_fun_compile_flags, str):
+            self.__ext_fun_compile_flags = ext_fun_compile_flags
+        else:
+            raise Exception('Invalid ext_fun_compile_flags, expected a string.\n')
 
     @hessian_approx.setter
     def hessian_approx(self, hessian_approx):
@@ -2956,6 +2993,7 @@ class AcadosOcp:
         - :py:attr:`solver_options` of type :py:class:`acados_template.acados_ocp.AcadosOcpOptions`
 
         - :py:attr:`acados_include_path` (set automatically)
+        - :py:attr:`shared_lib_ext` (set automatically)
         - :py:attr:`acados_lib_path` (set automatically)
         - :py:attr:`parameter_values` - used to initialize the parameters (can be changed)
     """
@@ -2982,9 +3020,11 @@ class AcadosOcp:
         """Path to acados include directory (set automatically), type: `string`"""
         self.acados_lib_path = os.path.join(acados_path, 'lib').replace(os.sep, '/') # the replace part is important on Windows for CMake
         """Path to where acados library is located, type: `string`"""
+        self.shared_lib_ext = get_lib_ext()
 
-        import numpy
-        self.cython_include_dirs = numpy.get_include()
+        # get cython paths
+        from sysconfig import get_paths
+        self.cython_include_dirs = [np.get_include(), get_paths()['include']]
 
         self.__parameter_values = np.array([])
         self.__problem_class = 'OCP'
