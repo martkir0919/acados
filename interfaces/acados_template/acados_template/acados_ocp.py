@@ -508,9 +508,15 @@ class AcadosOcpCost:
 
     In case of NONLINEAR_LS:
     stage cost is
-    :math:`l(x,u,z) = || y(x,u,z) - y_\\text{ref}||^2_W`,
+    :math:`l(x,u,z,p) = || y(x,u,z,p) - y_\\text{ref}||^2_W`,
     terminal cost is
-    :math:`m(x) = || y^e(x) - y_\\text{ref}^e||^2_{W^e}`
+    :math:`m(x,p) = || y^e(x,p) - y_\\text{ref}^e||^2_{W^e}`
+
+    In case of CONVEX_OVER_NONLINEAR:
+    stage cost is
+    :math:`l(x,u,p) = \psi(y(x,u,p) - y_\\text{ref}, p)`,
+    terminal cost is
+    :math:`m(x, p) = \psi^e (y^e(x,p) - y_\\text{ref}^e, p)`
     """
     def __init__(self):
         # initial stage
@@ -548,7 +554,7 @@ class AcadosOcpCost:
     @property
     def cost_type_0(self):
         """Cost type at initial shooting node (0)
-        -- string in {EXTERNAL, LINEAR_LS, NONLINEAR_LS} or :code:`None`.
+        -- string in {EXTERNAL, LINEAR_LS, NONLINEAR_LS, CONVEX_OVER_NONLINEAR} or :code:`None`.
         Default: :code:`None`.
 
             .. note:: Cost at initial stage is the same as for intermediate shooting nodes if not set differently explicitly.
@@ -604,10 +610,10 @@ class AcadosOcpCost:
 
     @yref_0.setter
     def yref_0(self, yref_0):
-        if isinstance(yref_0, np.ndarray):
+        if isinstance(yref_0, np.ndarray) and len(yref_0.shape) == 1:
             self.__yref_0 = yref_0
         else:
-            raise Exception('Invalid yref_0 value, expected numpy array.')
+            raise Exception('Invalid yref_0 value, expected 1-dimensional numpy array.')
 
     @W_0.setter
     def W_0(self, W_0):
@@ -653,7 +659,7 @@ class AcadosOcpCost:
     def cost_type(self):
         """
         Cost type at intermediate shooting nodes (1 to N-1)
-        -- string in {EXTERNAL, LINEAR_LS, NONLINEAR_LS}.
+        -- string in {EXTERNAL, LINEAR_LS, NONLINEAR_LS, CONVEX_OVER_NONLINEAR}.
         Default: 'LINEAR_LS'.
         """
         return self.__cost_type
@@ -731,7 +737,7 @@ class AcadosOcpCost:
 
     @cost_type.setter
     def cost_type(self, cost_type):
-        cost_types = ('LINEAR_LS', 'NONLINEAR_LS', 'EXTERNAL')
+        cost_types = ('LINEAR_LS', 'NONLINEAR_LS', 'EXTERNAL', 'CONVEX_OVER_NONLINEAR')
         if cost_type in cost_types:
             self.__cost_type = cost_type
         else:
@@ -739,7 +745,7 @@ class AcadosOcpCost:
 
     @cost_type_0.setter
     def cost_type_0(self, cost_type_0):
-        cost_types = ('LINEAR_LS', 'NONLINEAR_LS', 'EXTERNAL')
+        cost_types = ('LINEAR_LS', 'NONLINEAR_LS', 'EXTERNAL', 'CONVEX_OVER_NONLINEAR')
         if cost_type_0 in cost_types:
             self.__cost_type_0 = cost_type_0
         else:
@@ -780,10 +786,10 @@ class AcadosOcpCost:
 
     @yref.setter
     def yref(self, yref):
-        if isinstance(yref, np.ndarray):
+        if isinstance(yref, np.ndarray) and len(yref.shape) == 1:
             self.__yref = yref
         else:
-            raise Exception('Invalid yref value, expected numpy array.')
+            raise Exception('Invalid yref value, expected 1-dimensional numpy array.')
 
     @Zl.setter
     def Zl(self, Zl):
@@ -818,14 +824,14 @@ class AcadosOcpCost:
         if cost_ext_fun_type in ['casadi', 'generic']:
             self.__cost_ext_fun_type = cost_ext_fun_type
         else:
-            raise Exception('Invalid cost_ext_fun_type value, expected numpy array.')
+            raise Exception("Invalid cost_ext_fun_type value, expected one in ['casadi', 'generic'].")
 
     # Mayer term
     @property
     def cost_type_e(self):
         """
         Cost type at terminal shooting node (N)
-        -- string in {EXTERNAL, LINEAR_LS, NONLINEAR_LS}.
+        -- string in {EXTERNAL, LINEAR_LS, NONLINEAR_LS, CONVEX_OVER_NONLINEAR}.
         Default: 'LINEAR_LS'.
         """
         return self.__cost_type_e
@@ -881,7 +887,7 @@ class AcadosOcpCost:
 
     @property
     def cost_ext_fun_type_e(self):
-        """Type of external function for cost at intermediate shooting nodes (1 to N-1).
+        """Type of external function for cost at terminal shooting node (N).
         -- string in {casadi, generic}
         Default: :code:'casadi'.
         """
@@ -889,7 +895,7 @@ class AcadosOcpCost:
 
     @cost_type_e.setter
     def cost_type_e(self, cost_type_e):
-        cost_types = ('LINEAR_LS', 'NONLINEAR_LS', 'EXTERNAL')
+        cost_types = ('LINEAR_LS', 'NONLINEAR_LS', 'EXTERNAL', 'CONVEX_OVER_NONLINEAR')
 
         if cost_type_e in cost_types:
             self.__cost_type_e = cost_type_e
@@ -914,10 +920,10 @@ class AcadosOcpCost:
 
     @yref_e.setter
     def yref_e(self, yref_e):
-        if isinstance(yref_e, np.ndarray):
+        if isinstance(yref_e, np.ndarray) and len(yref_e.shape) == 1:
             self.__yref_e = yref_e
         else:
-            raise Exception('Invalid yref_e value, expected numpy array.')
+            raise Exception('Invalid yref_e value, expected 1-dimensional numpy array.')
 
     @Zl_e.setter
     def Zl_e(self, Zl_e):
@@ -952,7 +958,7 @@ class AcadosOcpCost:
         if cost_ext_fun_type_e in ['casadi', 'generic']:
             self.__cost_ext_fun_type_e = cost_ext_fun_type_e
         else:
-            raise Exception('Invalid cost_ext_fun_type_e value, expected numpy array.')
+            raise Exception("Invalid cost_ext_fun_type_e value, expected one in ['casadi', 'generic'].")
 
     def set(self, attr, value):
         setattr(self, attr, value)
@@ -2144,8 +2150,6 @@ class AcadosOcpOptions:
         self.__Tsim = None                                    # automatically calculated as tf/N
         self.__print_level = 0                                # print level
         self.__initialize_t_slacks = 0                        # possible values: 0, 1
-        self.__model_external_shared_lib_dir   = None         # path to the the .so lib
-        self.__model_external_shared_lib_name  = None         # name of the the .so lib
         self.__regularize_method = None
         self.__time_steps = None
         self.__shooting_nodes = None
@@ -2160,8 +2164,12 @@ class AcadosOcpOptions:
         self.__full_step_dual = 0
         self.__eps_sufficient_descent = 1e-4
         self.__hpipm_mode = 'BALANCE'
+        # TODO: move those out? they are more about generation than about the acados OCP solver.
         self.__ext_fun_compile_flags = '-O2'
-
+        self.__model_external_shared_lib_dir   = None         # path to the the .so lib
+        self.__model_external_shared_lib_name  = None         # name of the the .so lib
+        self.__custom_update_filename = ''
+        self.__custom_update_header_filename = ''
 
     @property
     def qp_solver(self):
@@ -2178,6 +2186,47 @@ class AcadosOcpOptions:
         Default: '-O2'.
         """
         return self.__ext_fun_compile_flags
+
+
+    @property
+    def custom_update_filename(self):
+        """
+        Filename of the custom C function to update solver data and parameters in between solver calls
+
+        This file has to implement the functions
+        int custom_update_init_function([model.name]_solver_capsule* capsule);
+        int custom_update_function([model.name]_solver_capsule* capsule);
+        int custom_update_terminate_function([model.name]_solver_capsule* capsule);
+
+
+        Default: ''.
+        """
+        return self.__custom_update_filename
+
+
+    @property
+    def custom_update_header_filename(self):
+        """
+        Header filename of the custom C function to update solver data and parameters in between solver calls
+
+        This file has to declare the custom_update functions and look as follows:
+
+        ```
+        // Called at the end of solver creation.
+        // This is allowed to allocate memory and store the pointer to it into capsule->custom_update_memory.
+        int custom_update_init_function([model.name]_solver_capsule* capsule);
+
+        // Custom update function that can be called between solver calls
+        int custom_update_function([model.name]_solver_capsule* capsule, double* data, int data_len);
+
+        // Called just before destroying the solver.
+        // Responsible to free allocated memory, stored at capsule->custom_update_memory.
+        int custom_update_terminate_function([model.name]_solver_capsule* capsule);
+
+        Default: ''.
+        """
+        return self.__custom_update_header_filename
+
 
     @property
     def hpipm_mode(self):
@@ -2644,6 +2693,22 @@ class AcadosOcpOptions:
         else:
             raise Exception('Invalid ext_fun_compile_flags, expected a string.\n')
 
+
+    @custom_update_filename.setter
+    def custom_update_filename(self, custom_update_filename):
+        if isinstance(custom_update_filename, str):
+            self.__custom_update_filename = custom_update_filename
+        else:
+            raise Exception('Invalid custom_update_filename, expected a string.\n')
+
+
+    @custom_update_header_filename.setter
+    def custom_update_header_filename(self, custom_update_header_filename):
+        if isinstance(custom_update_header_filename, str):
+            self.__custom_update_header_filename = custom_update_header_filename
+        else:
+            raise Exception('Invalid custom_update_header_filename, expected a string.\n')
+
     @hessian_approx.setter
     def hessian_approx(self, hessian_approx):
         hessian_approxs = ('GAUSS_NEWTON', 'EXACT')
@@ -3015,7 +3080,7 @@ class AcadosOcp:
         """Constraints definitions, type :py:class:`acados_template.acados_ocp.AcadosOcpConstraints`"""
         self.solver_options = AcadosOcpOptions()
         """Solver Options, type :py:class:`acados_template.acados_ocp.AcadosOcpOptions`"""
-		
+
         self.acados_include_path = os.path.join(acados_path, 'include').replace(os.sep, '/') # the replace part is important on Windows for CMake
         """Path to acados include directory (set automatically), type: `string`"""
         self.acados_lib_path = os.path.join(acados_path, 'lib').replace(os.sep, '/') # the replace part is important on Windows for CMake

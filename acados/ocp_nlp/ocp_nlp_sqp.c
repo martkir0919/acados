@@ -245,10 +245,11 @@ void ocp_nlp_sqp_opts_set(void *config_, void *opts_, const char *field, void* v
         {
             int* rti_phase = (int *) value;
             if (*rti_phase < 0 || *rti_phase > 0) {
-                printf("\nerror: ocp_nlp_sqp_opts_set: invalid value for rti_phase field."); 
+                printf("\nerror: ocp_nlp_sqp_opts_set: invalid value for rti_phase field.");
                 printf("possible values are: 0\n");
                 exit(1);
-            } else opts->rti_phase = *rti_phase;
+            }
+            opts->rti_phase = *rti_phase;
         }
         else if (!strcmp(field, "initialize_t_slacks"))
         {
@@ -593,7 +594,7 @@ int ocp_nlp_sqp(void *config_, void *dims_, void *nlp_in_, void *nlp_out_,
             // restore number of threads
             omp_set_num_threads(num_threads_bkp);
 #endif
-            mem->status = ACADOS_FAILURE;
+            mem->status = ACADOS_NAN_DETECTED;
             mem->sqp_iter = sqp_iter;
             mem->time_tot = acados_toc(&timer0);
 
@@ -1027,45 +1028,14 @@ int ocp_nlp_sqp_precompute(void *config_, void *dims_, void *nlp_in_, void *nlp_
     ocp_nlp_sqp_opts *opts = opts_;
     ocp_nlp_sqp_memory *mem = mem_;
     ocp_nlp_in *nlp_in = nlp_in_;
-    // ocp_nlp_out *nlp_out = nlp_out_;
+    ocp_nlp_out *nlp_out = nlp_out_;
     ocp_nlp_memory *nlp_mem = mem->nlp_mem;
 
     ocp_nlp_sqp_workspace *work = work_;
     ocp_nlp_sqp_cast_workspace(config, dims, opts, mem, work);
     ocp_nlp_workspace *nlp_work = work->nlp_work;
 
-    int N = dims->N;
-    int status = ACADOS_SUCCESS;
-
-    int ii;
-
-    // TODO(all) add flag to enable/disable checks
-    for (ii = 0; ii <= N; ii++)
-    {
-        int module_val;
-        config->constraints[ii]->dims_get(config->constraints[ii], dims->constraints[ii], "ns", &module_val);
-        if (dims->ns[ii] != module_val)
-        {
-            printf("ocp_nlp_sqp_precompute: inconsistent dimension ns for stage %d with constraint module, got %d, module: %d.",
-                   ii, dims->ns[ii], module_val);
-            exit(1);
-        }
-    }
-
-    // precompute
-    for (ii = 0; ii < N; ii++)
-    {
-        // set T
-        config->dynamics[ii]->model_set(config->dynamics[ii], dims->dynamics[ii],
-                                        nlp_in->dynamics[ii], "T", nlp_in->Ts+ii);
-        // dynamics precompute
-        status = config->dynamics[ii]->precompute(config->dynamics[ii], dims->dynamics[ii],
-                                                nlp_in->dynamics[ii], opts->nlp_opts->dynamics[ii],
-                                                nlp_mem->dynamics[ii], nlp_work->dynamics[ii]);
-        if (status != ACADOS_SUCCESS)
-            return status;
-    }
-    return status;
+    return ocp_nlp_precompute_common(config, dims, nlp_in, nlp_out, opts->nlp_opts, nlp_mem, nlp_work);
 }
 
 
@@ -1104,7 +1074,7 @@ void ocp_nlp_sqp_eval_param_sens(void *config_, void *dims_, void *opts_, void *
 
 //        d_ocp_qp_sol_print(work->tmp_qp_out->dim, work->tmp_qp_out);
 //        exit(1);
-        
+
         /* copy tmp_qp_out into sens_nlp_out */
 
         int i;
@@ -1142,7 +1112,6 @@ void ocp_nlp_sqp_eval_param_sens(void *config_, void *dims_, void *opts_, void *
 
 
 
-// TODO rename memory_get ???
 void ocp_nlp_sqp_get(void *config_, void *dims_, void *mem_, const char *field, void *return_value_)
 {
     ocp_nlp_config *config = config_;

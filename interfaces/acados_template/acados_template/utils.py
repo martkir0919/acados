@@ -38,9 +38,16 @@ import shutil
 import numpy as np
 from casadi import SX, MX, DM, Function, CasadiMeta
 
-ALLOWED_CASADI_VERSIONS = ('3.5.5', '3.5.4', '3.5.3', '3.5.2', '3.5.1', '3.4.5', '3.4.0')
+ALLOWED_CASADI_VERSIONS = ('3.5.6', '3.5.5', '3.5.4', '3.5.3', '3.5.2', '3.5.1', '3.4.5', '3.4.0')
 
 TERA_VERSION = "0.0.34"
+
+PLATFORM2TERA = {
+    "linux": "linux",
+    "darwin": "osx",
+    "win32": "windows"
+}
+
 
 def get_acados_path():
     ACADOS_PATH = os.environ.get('ACADOS_SOURCE_DIR')
@@ -72,20 +79,17 @@ def get_tera_exec_path():
     return TERA_PATH
 
 
-platform2tera = {
-    "linux": "linux",
-    "darwin": "osx",
-    "win32": "windows"
-}
-
-
-def casadi_version_warning(casadi_version):
-    msg =  'Warning: Please note that the following versions of CasADi  are '
-    msg += 'officially supported: {}.\n '.format(" or ".join(ALLOWED_CASADI_VERSIONS))
-    msg += 'If there is an incompatibility with the CasADi generated code, '
-    msg += 'please consider changing your CasADi version.\n'
-    msg += 'Version {} currently in use.'.format(casadi_version)
-    print(msg)
+def check_casadi_version():
+    casadi_version = CasadiMeta.version()
+    if casadi_version in ALLOWED_CASADI_VERSIONS:
+        return
+    else:
+        msg =  'Warning: Please note that the following versions of CasADi  are '
+        msg += 'officially supported: {}.\n '.format(" or ".join(ALLOWED_CASADI_VERSIONS))
+        msg += 'If there is an incompatibility with the CasADi generated code, '
+        msg += 'please consider changing your CasADi version.\n'
+        msg += 'Version {} currently in use.'.format(casadi_version)
+        print(msg)
 
 
 def is_column(x):
@@ -178,7 +182,7 @@ def get_tera():
 
     repo_url = "https://github.com/acados/tera_renderer/releases"
     url = "{}/download/v{}/t_renderer-v{}-{}".format(
-        repo_url, TERA_VERSION, TERA_VERSION, platform2tera[sys.platform])
+        repo_url, TERA_VERSION, TERA_VERSION, PLATFORM2TERA[sys.platform])
 
     manual_install = 'For manual installation follow these instructions:\n'
     manual_install += '1 Download binaries from {}\n'.format(url)
@@ -213,17 +217,18 @@ def get_tera():
     sys.exit(1)
 
 
-def render_template(in_file, out_file, template_dir, json_path):
+def render_template(in_file, out_file, output_dir, json_path, template_glob=None):
+
+    acados_path = os.path.dirname(os.path.abspath(__file__))
+    if template_glob is None:
+        template_glob = os.path.join(acados_path, 'c_templates_tera', '**', '*')
     cwd = os.getcwd()
-    if not os.path.exists(template_dir):
-        os.mkdir(template_dir)
-    os.chdir(template_dir)
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    os.chdir(output_dir)
 
     tera_path = get_tera()
-
-    # setting up loader and environment
-    acados_path = os.path.dirname(os.path.abspath(__file__))
-    template_glob = os.path.join(acados_path, 'c_templates_tera', '*')
 
     # call tera as system cmd
     os_cmd = f"{tera_path} '{template_glob}' '{in_file}' '{json_path}' '{out_file}'"
@@ -233,21 +238,24 @@ def render_template(in_file, out_file, template_dir, json_path):
 
     status = os.system(os_cmd)
     if (status != 0):
-        raise Exception(f'Rendering of {in_file} failed!\n\nAttempted to execute OS command:\n{os_cmd}\n.\n')
+        raise Exception(f'Rendering of {in_file} failed!\n\nAttempted to execute OS command:\n{os_cmd}\n\n')
 
     os.chdir(cwd)
 
 
 ## Conversion functions
-def np_array_to_list(np_array):
-    if isinstance(np_array, (np.ndarray)):
-        return np_array.tolist()
-    elif isinstance(np_array, (SX)):
-        return DM(np_array).full()
-    elif isinstance(np_array, (DM)):
-        return np_array.full()
+def make_object_json_dumpable(input):
+    if isinstance(input, (np.ndarray)):
+        return input.tolist()
+    elif isinstance(input, (SX)):
+        return input.serialize()
+    elif isinstance(input, (MX)):
+        # NOTE: MX expressions can not be serialized, only Functions.
+        return input.__str__()
+    elif isinstance(input, (DM)):
+        return input.full()
     else:
-        raise(Exception(f"Cannot convert to list type {type(np_array)}"))
+        raise TypeError(f"Cannot make input of type {type(input)} dumpable.")
 
 
 def format_class_dict(d):
@@ -270,63 +278,6 @@ def get_ocp_nlp_layout():
     with open(abs_path, 'r') as f:
         ocp_nlp_layout = json.load(f)
     return ocp_nlp_layout
-
-
-def ocp_check_against_layout(ocp_nlp, ocp_dims):
-    """
-    Check dimensions against layout
-    Parameters
-    ---------
-    ocp_nlp : dict
-        dictionary loaded from JSON to be post-processed.
-
-    ocp_dims : instance of AcadosOcpDims
-    """
-
-    ocp_nlp_layout = get_ocp_nlp_layout()
-
-    ocp_check_against_layout_recursion(ocp_nlp, ocp_dims, ocp_nlp_layout)
-    return
-
-
-def ocp_check_against_layout_recursion(ocp_nlp, ocp_dims, layout):
-
-    for key, item in ocp_nlp.items():
-
-        try:
-            layout_of_key = layout[key]
-        except KeyError:
-            raise Exception("ocp_check_against_layout_recursion: field" \
-                            f" '{key}' is not in layout but in OCP description.")
-
-        if isinstance(item, dict):
-            ocp_check_against_layout_recursion(item, ocp_dims, layout_of_key)
-
-        if 'ndarray' in layout_of_key:
-            # cast to np array
-            if isinstance(item, int) or isinstance(item, float):
-                item = np.array([item])
-        if isinstance(item, np.ndarray) and (layout_of_key[0] != 'str'):
-            dim_layout = []
-            dim_names = layout_of_key[1]
-
-            for dim_name in dim_names:
-                dim_layout.append(ocp_dims[dim_name])
-
-            dims = tuple(dim_layout)
-
-            item_dims = item.shape
-            if len(item_dims) != len(dims):
-                raise Exception(f'Mismatching dimensions for field "{key}". ' \
-                    f'Expected {len(dims)} dimensional array, got {len(item_dims)} dimensional array.')
-
-            if np.prod(item_dims) != 0 or np.prod(dims) != 0:
-                if dims != item_dims:
-                    raise Exception(f'acados -- mismatching dimensions for field "{key}". ' \
-                        f'Provided data has dimensions {item_dims}, ' \
-                        f'while associated dimensions {dim_names} are {dims}')
-    return
-
 
 def J_to_idx(J):
     nrows = J.shape[0]
@@ -387,7 +338,7 @@ def acados_dae_model_json_dump(model):
     # dump
     json_file = model_name + '_acados_dae.json'
     with open(json_file, 'w') as f:
-        json.dump(dae_dict, f, default=np_array_to_list, indent=4, sort_keys=True)
+        json.dump(dae_dict, f, default=make_object_json_dumpable, indent=4, sort_keys=True)
     print("dumped ", model_name, " dae to file:", json_file, "\n")
 
 

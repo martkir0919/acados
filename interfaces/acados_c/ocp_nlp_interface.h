@@ -66,6 +66,7 @@ typedef enum
 {
     LINEAR_LS,
     NONLINEAR_LS,
+    CONVEX_OVER_NONLINEAR,
     EXTERNAL,
     INVALID_COST,
 } ocp_nlp_cost_t;
@@ -244,6 +245,10 @@ ACADOS_SYMBOL_EXPORT int ocp_nlp_cost_model_set(ocp_nlp_config *config, ocp_nlp_
 /// \param field The name of the field, either lb, ub (others TBC)
 /// \param value Constraints function or values.
 ACADOS_SYMBOL_EXPORT int ocp_nlp_constraints_model_set(ocp_nlp_config *config, ocp_nlp_dims *dims,
+        ocp_nlp_in *in, int stage, const char *field, void *value);
+
+///
+ACADOS_SYMBOL_EXPORT void ocp_nlp_constraints_model_get(ocp_nlp_config *config, ocp_nlp_dims *dims,
         ocp_nlp_in *in, int stage, const char *field, void *value);
 
 /* out */

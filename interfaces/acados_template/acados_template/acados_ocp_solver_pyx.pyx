@@ -103,6 +103,24 @@ cdef class AcadosOcpSolverCython:
         self.nlp_solver = acados_solver.acados_get_nlp_solver(self.capsule)
 
 
+    def solve_for_x0(self, x0_bar):
+        """
+        Wrapper around `solve()` which sets initial state constraint, solves the OCP, and returns u0.
+        """
+        self.set(0, "lbx", x0_bar)
+        self.set(0, "ubx", x0_bar)
+
+        status = self.solve()
+
+        if status == 2:
+            print("Warning: acados_ocp_solver reached maximum iterations.")
+        elif status != 0:
+            raise Exception(f'acados acados_ocp_solver returned status {status}')
+
+        u0 = self.get(0, "u")
+        return u0
+
+
     def solve(self):
         """
         Solve the ocp with current input.
@@ -115,6 +133,19 @@ cdef class AcadosOcpSolverCython:
         Sets current iterate to all zeros.
         """
         return acados_solver.acados_reset(self.capsule, reset_qp_solver_mem)
+
+
+    def custom_update(self, data_):
+        """
+        A custom function that can be implemented by a user to be called between solver calls.
+        By default this does nothing.
+        The idea is to have a convenient wrapper to do complex updates of parameters and numerical data efficiently in C,
+        in a function that is compiled into the solver library and can be conveniently used in the Python environment.
+        """
+        data_len = len(data_)
+        cdef cnp.ndarray[cnp.float64_t, ndim=1] data = np.ascontiguousarray(data_, dtype=np.float64)
+
+        return acados_solver.acados_custom_update(self.capsule, <double *> data.data, data_len)
 
 
     def set_new_time_steps(self, new_time_steps):
@@ -553,6 +584,11 @@ cdef class AcadosOcpSolverCython:
                 acados_solver_common.ocp_nlp_set(self.nlp_config, \
                     self.nlp_solver, stage, field, <void *> value.data)
 
+            if field_ == 'z':
+                field = 'z_guess'.encode('utf-8')
+                acados_solver_common.ocp_nlp_set(self.nlp_config, \
+                    self.nlp_solver, stage, field, <void *> value.data)
+        return
 
     def cost_set(self, int stage, str field_, value_):
         """

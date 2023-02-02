@@ -42,21 +42,18 @@ import numpy as np
 from ctypes import POINTER, cast, CDLL, c_void_p, c_char_p, c_double, c_int, c_bool, byref
 from copy import deepcopy
 
-from .generate_c_code_explicit_ode import generate_c_code_explicit_ode
-from .generate_c_code_implicit_ode import generate_c_code_implicit_ode
-from .generate_c_code_gnsf import generate_c_code_gnsf
+from .casadi_function_generation import generate_c_code_implicit_ode, generate_c_code_gnsf, generate_c_code_explicit_ode
 from .acados_sim import AcadosSim
 from .acados_ocp import AcadosOcp
-from .acados_model import acados_model_strip_casadi_symbolics
-from .utils import is_column, render_template, format_class_dict, np_array_to_list,\
+from .utils import is_column, render_template, format_class_dict, make_object_json_dumpable,\
      make_model_consistent, set_up_imported_gnsf_model, get_python_interface_path, get_lib_ext,\
-     casadi_length, is_empty
+     casadi_length, is_empty, check_casadi_version
 from .builders import CMakeBuilder
 from .gnsf.detect_gnsf_structure import detect_gnsf_structure
 
 
 
-def make_sim_dims_consistent(acados_sim):
+def make_sim_dims_consistent(acados_sim: AcadosSim):
     dims = acados_sim.dims
     model = acados_sim.model
     # nx
@@ -95,7 +92,7 @@ def get_sim_layout():
     return sim_layout
 
 
-def sim_formulation_json_dump(acados_sim, json_file='acados_sim.json'):
+def sim_formulation_json_dump(acados_sim: AcadosSim, json_file='acados_sim.json'):
     # Load acados_sim structure description
     sim_layout = get_sim_layout()
 
@@ -108,11 +105,10 @@ def sim_formulation_json_dump(acados_sim, json_file='acados_sim.json'):
         # Copy sim object attributes dictionaries
         sim_dict[key]=dict(getattr(acados_sim, key).__dict__)
 
-    sim_dict['model'] = acados_model_strip_casadi_symbolics(sim_dict['model'])
     sim_json = format_class_dict(sim_dict)
 
     with open(json_file, 'w') as f:
-        json.dump(sim_json, f, default=np_array_to_list, indent=4, sort_keys=True)
+        json.dump(sim_json, f, default=make_object_json_dumpable, indent=4, sort_keys=True)
 
 
 def sim_get_default_cmake_builder() -> CMakeBuilder:
@@ -132,44 +128,42 @@ def sim_render_templates(json_file, model_name: str, code_export_dir, cmake_opti
     if not os.path.exists(json_path):
         raise Exception(f"{json_path} not found!")
 
-    template_dir = code_export_dir
-
-    ## Render templates
+    # Render templates
     in_file = 'acados_sim_solver.in.c'
     out_file = f'acados_sim_solver_{model_name}.c'
-    render_template(in_file, out_file, template_dir, json_path)
+    render_template(in_file, out_file, code_export_dir, json_path)
 
     in_file = 'acados_sim_solver.in.h'
     out_file = f'acados_sim_solver_{model_name}.h'
-    render_template(in_file, out_file, template_dir, json_path)
+    render_template(in_file, out_file, code_export_dir, json_path)
 
     in_file = 'acados_sim_solver.in.pxd'
     out_file = f'acados_sim_solver.pxd'
-    render_template(in_file, out_file, template_dir, json_path)
+    render_template(in_file, out_file, code_export_dir, json_path)
 
     # Builder
     if cmake_options is not None:
         in_file = 'CMakeLists.in.txt'
         out_file = 'CMakeLists.txt'
-        render_template(in_file, out_file, template_dir, json_path)
+        render_template(in_file, out_file, code_export_dir, json_path)
     else:
         in_file = 'Makefile.in'
         out_file = 'Makefile'
-        render_template(in_file, out_file, template_dir, json_path)
+        render_template(in_file, out_file, code_export_dir, json_path)
 
     in_file = 'main_sim.in.c'
     out_file = f'main_sim_{model_name}.c'
-    render_template(in_file, out_file, template_dir, json_path)
+    render_template(in_file, out_file, code_export_dir, json_path)
 
-    ## folder model
-    template_dir = os.path.join(code_export_dir, model_name + '_model')
+    # folder model
+    model_dir = os.path.join(code_export_dir, model_name + '_model')
 
     in_file = 'model.in.h'
     out_file = f'{model_name}_model.h'
-    render_template(in_file, out_file, template_dir, json_path)
+    render_template(in_file, out_file, model_dir, json_path)
 
 
-def sim_generate_external_functions(acados_sim):
+def sim_generate_external_functions(acados_sim: AcadosSim):
     model = acados_sim.model
     model = make_model_consistent(model)
 
@@ -186,6 +180,7 @@ def sim_generate_external_functions(acados_sim):
         os.makedirs(model_dir)
 
     # generate external functions
+    check_casadi_version()
     if integrator_type == 'ERK':
         generate_c_code_explicit_ode(model, opts)
     elif integrator_type == 'IRK':
@@ -358,6 +353,32 @@ class AcadosSimSolver:
         self.gettable_vectors = ['x', 'u', 'z', 'S_adj']
         self.gettable_matrices = ['S_forw', 'Sx', 'Su', 'S_hess', 'S_algebraic']
         self.gettable_scalars = ['CPUtime', 'time_tot', 'ADtime', 'time_ad', 'LAtime', 'time_la']
+
+
+    def simulate(self, x=None, u=None, z=None, p=None):
+        """
+        Simulate the system forward for the given x, u, z, p and return x_next.
+        Wrapper around `solve()` taking care of setting/getting inputs/outputs.
+        """
+        if x is not None:
+            self.set('x', x)
+        if u is not None:
+            self.set('u', u)
+        if z is not None:
+            self.set('z', z)
+        if p is not None:
+            self.set('p', p)
+
+        status = self.solve()
+
+        if status == 2:
+            print("Warning: acados_sim_solver reached maximum iterations.")
+        elif status != 0:
+            raise Exception(f'acados_sim_solver for model {self.model_name} returned status {status}.')
+
+        x_next = self.get('x')
+        return x_next
+
 
     def solve(self):
         """
