@@ -308,10 +308,43 @@ for stage = [0, N-1]
     field = 'qp_B';
     disp(strcat(field, " at stage ", num2str(stage), " = "));
     ocp.get(field, stage)
+    field = 'qp_Q';
+    disp(strcat(field, " at stage ", num2str(stage), " = "));
+    ocp.get(field, stage)
     field = 'qp_R';
     disp(strcat(field, " at stage ", num2str(stage), " = "));
     ocp.get(field, stage)
-    field = 'qp_Q';
+    field = 'qp_S';
+    disp(strcat(field, " at stage ", num2str(stage), " = "));
+    ocp.get(field, stage)
+    field = 'qp_q';
+    disp(strcat(field, " at stage ", num2str(stage), " = "));
+    ocp.get(field, stage)
+    field = 'qp_r';
+    disp(strcat(field, " at stage ", num2str(stage), " = "));
+    ocp.get(field, stage)
+    field = 'qp_C';
+    disp(strcat(field, " at stage ", num2str(stage), " = "));
+    ocp.get(field, stage)
+    field = 'qp_D';
+    disp(strcat(field, " at stage ", num2str(stage), " = "));
+    ocp.get(field, stage)
+    field = 'qp_lbu';
+    disp(strcat(field, " at stage ", num2str(stage), " = "));
+    ocp.get(field, stage)
+    field = 'qp_ubu';
+    disp(strcat(field, " at stage ", num2str(stage), " = "));
+    ocp.get(field, stage)
+    field = 'qp_lbx';
+    disp(strcat(field, " at stage ", num2str(stage), " = "));
+    ocp.get(field, stage)
+    field = 'qp_ubx';
+    disp(strcat(field, " at stage ", num2str(stage), " = "));
+    ocp.get(field, stage)
+    field = 'qp_lg';
+    disp(strcat(field, " at stage ", num2str(stage), " = "));
+    ocp.get(field, stage)
+    field = 'qp_ug';
     disp(strcat(field, " at stage ", num2str(stage), " = "));
     ocp.get(field, stage)
 end

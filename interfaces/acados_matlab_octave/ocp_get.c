@@ -440,9 +440,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             exit(1);
         }
     }
-    else if (!strcmp(field, "qp_A") || !strcmp(field, "qp_B") || !strcmp(field, "qp_Q") ||
-             !strcmp(field, "qp_R") || !strcmp(field, "qp_S") || !strcmp(field, "qp_b") ||
-             !strcmp(field, "qp_q") || !strcmp(field, "qp_r"))
+    else if (!strcmp(field, "qp_A") || !strcmp(field, "qp_B") || !strcmp(field, "qp_b") ||
+             !strcmp(field, "qp_Q") || !strcmp(field, "qp_R") || !strcmp(field, "qp_S") ||
+             !strcmp(field, "qp_q") || !strcmp(field, "qp_r") || !strcmp(field, "qp_C") ||
+             !strcmp(field, "qp_D") || !strcmp(field, "qp_lbu") || !strcmp(field, "qp_ubu") ||
+             !strcmp(field, "qp_lbx") || !strcmp(field, "qp_ubx") || !strcmp(field, "qp_lg") ||
+             !strcmp(field, "qp_ug"))
     {
         int out_dims[2];
         if (nrhs==2)
@@ -471,7 +474,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     else
     {
         MEX_FIELD_NOT_SUPPORTED_SUGGEST(fun_name, field,
-             "x, u, z, pi, lam, sl, su, t, sens_x, sens_u, sens_pi, status, sqp_iter, time_tot, time_lin, time_reg, time_qp_sol, stat, qp_solver_cond_H, qp_A, qp_B, qp_Q, qp_R, qp_S, qp_b, qp_q, qp_r");
+             "x, u, z, pi, lam, sl, su, t, sens_x, sens_u, sens_pi, status, sqp_iter, time_tot, time_lin, time_reg, time_qp_sol, stat, qp_solver_cond_H, qp_A, qp_B, qp_b, qp_Q, qp_R, qp_S, qp_q, qp_r, qp_C, qp_D, qp_lbu, qp_ubu, qp_lbx, qp_ubx, qp_lg, qp_ug");
     }
 
     return;
