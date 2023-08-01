@@ -1,9 +1,6 @@
 # -*- coding: future_fstrings -*-
 #
-# Copyright 2019 Gianluca Frison, Dimitris Kouzoupis, Robin Verschueren,
-# Andrea Zanelli, Niels van Duijkeren, Jonathan Frey, Tommaso Sartor,
-# Branimir Novoselnik, Rien Quirynen, Rezart Qelibari, Dang Doan,
-# Jonas Koenemann, Yutao Chen, Tobias Schöls, Jonas Schlagenhauf, Moritz Diehl
+# Copyright (c) The acados authors.
 #
 # This file is part of acados.
 #
@@ -500,6 +497,12 @@ class AcadosOcpCost:
     """
     Class containing the numerical data of the cost:
 
+    NOTE: all cost terms, except for the terminal one are weighted with the corresponding time step.
+    This means given the time steps are :math:`\Delta t_0,..., \Delta t_N`, the total cost is given by:
+    :math:`c_\\text{total} = \Delta t_0 \cdot c_0(x_0, u_0, p_0, z_0) + ... + \Delta t_{N-1} \cdot c_{N-1}(x_0, u_0, p_0, z_0) + c_N(x_N, p_N)`.
+
+    This means the Lagrange cost term is given in continuous time, this makes up for a seeminglessly OCP discretization with a nonuniform time grid.
+
     In case of LINEAR_LS:
     stage cost is
     :math:`l(x,u,z) = || V_x \, x + V_u \, u + V_z \, z - y_\\text{ref}||^2_W`,
@@ -701,28 +704,28 @@ class AcadosOcpCost:
 
     @property
     def Zl(self):
-        """:math:`Z_l` - diagonal of Hessian wrt lower slack at intermediate shooting nodes (1 to N-1).
+        """:math:`Z_l` - diagonal of Hessian wrt lower slack at intermediate shooting nodes (0 to N-1).
         Default: :code:`np.array([])`.
         """
         return self.__Zl
 
     @property
     def Zu(self):
-        """:math:`Z_u` - diagonal of Hessian wrt upper slack at intermediate shooting nodes (1 to N-1).
+        """:math:`Z_u` - diagonal of Hessian wrt upper slack at intermediate shooting nodes (0 to N-1).
         Default: :code:`np.array([])`.
         """
         return self.__Zu
 
     @property
     def zl(self):
-        """:math:`z_l` - gradient wrt lower slack at intermediate shooting nodes (1 to N-1).
+        """:math:`z_l` - gradient wrt lower slack at intermediate shooting nodes (0 to N-1).
         Default: :code:`np.array([])`.
         """
         return self.__zl
 
     @property
     def zu(self):
-        """:math:`z_u` - gradient wrt upper slack at intermediate shooting nodes (1 to N-1).
+        """:math:`z_u` - gradient wrt upper slack at intermediate shooting nodes (0 to N-1).
         Default: :code:`np.array([])`.
         """
         return self.__zu
@@ -980,6 +983,7 @@ class AcadosOcpConstraints:
         self.__ubx_0   = np.array([])
         self.__idxbx_0 = np.array([])
         self.__idxbxe_0 = np.array([])
+        self.__has_x0 = False
         # state bounds
         self.__lbx     = np.array([])
         self.__ubx     = np.array([])
@@ -1576,6 +1580,10 @@ class AcadosOcpConstraints:
         print("idxbxe_0: ", self.__idxbxe_0)
         return None
 
+    @property
+    def has_x0(self):
+        return self.__has_x0
+
     # SETTERS
     @constr_type.setter
     def constr_type(self, constr_type):
@@ -1631,7 +1639,6 @@ class AcadosOcpConstraints:
         else:
             raise Exception('Invalid idxbxe_0 value.')
 
-
     @x0.setter
     def x0(self, x0):
         if isinstance(x0, np.ndarray):
@@ -1639,6 +1646,7 @@ class AcadosOcpConstraints:
             self.__ubx_0 = x0
             self.__idxbx_0 = np.arange(x0.size)
             self.__idxbxe_0 = np.arange(x0.size)
+            self.__has_x0 = True
         else:
             raise Exception('Invalid x0 value.')
 
@@ -2170,6 +2178,8 @@ class AcadosOcpOptions:
         self.__model_external_shared_lib_name  = None         # name of the the .so lib
         self.__custom_update_filename = ''
         self.__custom_update_header_filename = ''
+        self.__custom_templates = []
+        self.__custom_update_copy = True
 
     @property
     def qp_solver(self):
@@ -2205,6 +2215,19 @@ class AcadosOcpOptions:
 
 
     @property
+    def custom_templates(self):
+        """
+        List of tuples of the form:
+        (input_filename, output_filename)
+
+        Custom templates are render in OCP solver generation.
+
+        Default: [].
+        """
+        return self.__custom_templates
+
+
+    @property
     def custom_update_header_filename(self):
         """
         Header filename of the custom C function to update solver data and parameters in between solver calls
@@ -2226,6 +2249,14 @@ class AcadosOcpOptions:
         Default: ''.
         """
         return self.__custom_update_header_filename
+
+    @property
+    def custom_update_copy(self):
+        """
+        Boolean;
+        If True, the custom update function files are copied into the `code_export_directory`.
+        """
+        return self.__custom_update_copy
 
 
     @property
@@ -2701,6 +2732,17 @@ class AcadosOcpOptions:
         else:
             raise Exception('Invalid custom_update_filename, expected a string.\n')
 
+    @custom_templates.setter
+    def custom_templates(self, custom_templates):
+        if not isinstance(custom_templates, list):
+            raise Exception('Invalid custom_templates, expected a list.\n')
+        for tup in custom_templates:
+            if not isinstance(tup, tuple):
+                raise Exception('Invalid custom_templates, shoubld be list of tuples.\n')
+            for s in tup:
+                if not isinstance(s, str):
+                    raise Exception('Invalid custom_templates, shoubld be list of tuples of strings.\n')
+        self.__custom_templates = custom_templates
 
     @custom_update_header_filename.setter
     def custom_update_header_filename(self, custom_update_header_filename):
@@ -2708,6 +2750,13 @@ class AcadosOcpOptions:
             self.__custom_update_header_filename = custom_update_header_filename
         else:
             raise Exception('Invalid custom_update_header_filename, expected a string.\n')
+
+    @custom_update_copy.setter
+    def custom_update_copy(self, custom_update_copy):
+        if isinstance(custom_update_copy, bool):
+            self.__custom_update_copy = custom_update_copy
+        else:
+            raise Exception('Invalid custom_update_copy, expected a bool.\n')
 
     @hessian_approx.setter
     def hessian_approx(self, hessian_approx):

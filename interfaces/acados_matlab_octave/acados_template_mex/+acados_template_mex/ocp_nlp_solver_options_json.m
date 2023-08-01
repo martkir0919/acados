@@ -1,8 +1,5 @@
 %
-% Copyright 2019 Gianluca Frison, Dimitris Kouzoupis, Robin Verschueren,
-% Andrea Zanelli, Niels van Duijkeren, Jonathan Frey, Tommaso Sartor,
-% Branimir Novoselnik, Rien Quirynen, Rezart Qelibari, Dang Doan,
-% Jonas Koenemann, Yutao Chen, Tobias Schöls, Jonas Schlagenhauf, Moritz Diehl
+% Copyright (c) The acados authors.
 %
 % This file is part of acados.
 %
@@ -29,6 +26,7 @@
 % CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 % ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 % POSSIBILITY OF SUCH DAMAGE.;
+
 %
 
 classdef ocp_nlp_solver_options_json < handle
@@ -122,6 +120,17 @@ classdef ocp_nlp_solver_options_json < handle
             obj.hpipm_mode = 'BALANCE';
             obj.nlp_solver_ext_qp_res = 0;
             obj.ext_fun_compile_flags = '-O2';
+        end
+        function s = struct(self)
+            if exist('properties')
+                publicProperties = eval('properties(self)');
+            else
+                publicProperties = fieldnames(self);
+            end
+            s = struct();
+            for fi = 1:numel(publicProperties)
+                s.(publicProperties{fi}) = self.(publicProperties{fi});
+            end
         end
     end
 end

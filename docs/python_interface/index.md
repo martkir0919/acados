@@ -29,7 +29,7 @@ The Python interface relies on the same problem formulation as the MATLAB interf
     ```
     Note: There are known path issues with more high level virtual environment managers. Such as `conda`, `miniconda`, `Pycharm`.
     It is not recommended to use them.
-    However, if you need to do so and have issues, please have a look in the [`acados` forum](discourse.acados.org/).
+    However, if you need to do so and have issues, please have a look in the [`acados` forum](https://discourse.acados.org/).
 
 2. Install `acados_template` Python package:
     ```
@@ -47,7 +47,7 @@ The Python interface relies on the same problem formulation as the MATLAB interf
 
 4. Run a Python example to check that everything works.
     We suggest to get started with the example
-    `<acados_root>/examples/acados_python/getting_started/ocp/minimal_example_ocp.py`.
+    `<acados_root>/examples/acados_python/getting_started/minimal_example_ocp.py`.
     The example has to be run from the folder in which it is located.
 
 5. Optional: Can be done automatically through the interface:

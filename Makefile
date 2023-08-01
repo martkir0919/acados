@@ -1,8 +1,5 @@
 #
-# Copyright 2019 Gianluca Frison, Dimitris Kouzoupis, Robin Verschueren,
-# Andrea Zanelli, Niels van Duijkeren, Jonathan Frey, Tommaso Sartor,
-# Branimir Novoselnik, Rien Quirynen, Rezart Qelibari, Dang Doan,
-# Jonas Koenemann, Yutao Chen, Tobias Schöls, Jonas Schlagenhauf, Moritz Diehl
+# Copyright (c) The acados authors.
 #
 # This file is part of acados.
 #
@@ -52,6 +49,7 @@ OBJS += acados/ocp_nlp/ocp_nlp_cost_common.o
 OBJS += acados/ocp_nlp/ocp_nlp_cost_ls.o
 OBJS += acados/ocp_nlp/ocp_nlp_cost_nls.o
 OBJS += acados/ocp_nlp/ocp_nlp_cost_external.o
+OBJS += acados/ocp_nlp/ocp_nlp_cost_conl.o
 OBJS += acados/ocp_nlp/ocp_nlp_constraints_common.o
 OBJS += acados/ocp_nlp/ocp_nlp_constraints_bgh.o
 OBJS += acados/ocp_nlp/ocp_nlp_constraints_bgp.o

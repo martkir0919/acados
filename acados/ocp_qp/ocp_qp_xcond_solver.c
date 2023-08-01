@@ -1,8 +1,5 @@
 /*
- * Copyright 2019 Gianluca Frison, Dimitris Kouzoupis, Robin Verschueren,
- * Andrea Zanelli, Niels van Duijkeren, Jonathan Frey, Tommaso Sartor,
- * Branimir Novoselnik, Rien Quirynen, Rezart Qelibari, Dang Doan,
- * Jonas Koenemann, Yutao Chen, Tobias Schöls, Jonas Schlagenhauf, Moritz Diehl
+ * Copyright (c) The acados authors.
  *
  * This file is part of acados.
  *
@@ -146,8 +143,6 @@ void ocp_qp_xcond_solver_dims_set_(void *config_, ocp_qp_xcond_solver_dims *dims
 void ocp_qp_xcond_solver_dims_get_(void *config_, ocp_qp_xcond_solver_dims *dims,
                                   int stage, const char *field, int* value)
 {
-    ocp_qp_xcond_solver_config *config = config_;
-
     // get from orig_dims
     ocp_qp_dims_get(config_, dims->orig_dims, stage, field, value);
 

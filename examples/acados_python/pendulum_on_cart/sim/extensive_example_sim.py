@@ -1,9 +1,6 @@
 # -*- coding: future_fstrings -*-
 #
-# Copyright 2019 Gianluca Frison, Dimitris Kouzoupis, Robin Verschueren,
-# Andrea Zanelli, Niels van Duijkeren, Jonathan Frey, Tommaso Sartor,
-# Branimir Novoselnik, Rien Quirynen, Rezart Qelibari, Dang Doan,
-# Jonas Koenemann, Yutao Chen, Tobias Schöls, Jonas Schlagenhauf, Moritz Diehl
+# Copyright (c) The acados authors.
 #
 # This file is part of acados.
 #
@@ -35,7 +32,7 @@
 import os, sys, json
 sys.path.insert(0, '../common')
 
-from acados_template import AcadosSim, AcadosSimSolver, acados_dae_model_json_dump
+from acados_template import AcadosSim, AcadosSimSolver, acados_dae_model_json_dump, sim_get_default_cmake_builder
 from pendulum_model import export_pendulum_ode_model
 from utils import plot_pendulum
 import numpy as np
@@ -43,10 +40,8 @@ import matplotlib.pyplot as plt
 
 sim = AcadosSim()
 
-# export model 
+# model
 model = export_pendulum_ode_model()
-
-# set model_name 
 sim.model = model
 
 Tf = 0.1
@@ -108,7 +103,8 @@ if sim.solver_options.integrator_type == "GNSF" and not DETECT_GNSF:
     sim.gnsf_model = gnsf_dict
 
 # create
-acados_integrator = AcadosSimSolver(sim)
+cmake_builder = sim_get_default_cmake_builder()
+acados_integrator = AcadosSimSolver(sim, cmake_builder=cmake_builder)
 
 simX = np.ndarray((N+1, nx))
 x0 = np.array([0.0, np.pi+1, 0.0, 0.0])
@@ -166,7 +162,5 @@ if status != 0:
     raise Exception(f'acados returned status {status}.')
 
 
-
-
 # plot results
-plot_pendulum(np.linspace(0, Tf, N+1), 10, np.zeros((N, nu)), simX, latexify=False)
+plot_pendulum(np.linspace(0, N*Tf, N+1), 10, np.zeros((N, nu)), simX, latexify=False)

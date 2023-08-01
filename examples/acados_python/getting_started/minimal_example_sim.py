@@ -1,9 +1,6 @@
 # -*- coding: future_fstrings -*-
 #
-# Copyright 2019 Gianluca Frison, Dimitris Kouzoupis, Robin Verschueren,
-# Andrea Zanelli, Niels van Duijkeren, Jonathan Frey, Tommaso Sartor,
-# Branimir Novoselnik, Rien Quirynen, Rezart Qelibari, Dang Doan,
-# Jonas Koenemann, Yutao Chen, Tobias Schöls, Jonas Schlagenhauf, Moritz Diehl
+# Copyright (c) The acados authors.
 #
 # This file is part of acados.
 #
@@ -90,7 +87,7 @@ def main():
     print("S_forw, sensitivities of simulation result wrt x,u:\n", S_forw)
 
     # plot results
-    plot_pendulum(np.linspace(0, Tf, N+1), 10, np.repeat(u0, N), simX, latexify=False)
+    plot_pendulum(np.linspace(0, N*Tf, N+1), 10, np.repeat(u0, N), simX, latexify=False)
 
 
 if __name__ == "__main__":

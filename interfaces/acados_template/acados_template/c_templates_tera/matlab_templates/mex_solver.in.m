@@ -1,8 +1,5 @@
 %
-% Copyright 2019 Gianluca Frison, Dimitris Kouzoupis, Robin Verschueren,
-% Andrea Zanelli, Niels van Duijkeren, Jonathan Frey, Tommaso Sartor,
-% Branimir Novoselnik, Rien Quirynen, Rezart Qelibari, Dang Doan,
-% Jonas Koenemann, Yutao Chen, Tobias Schöls, Jonas Schlagenhauf, Moritz Diehl
+% Copyright (c) The acados authors.
 %
 % This file is part of acados.
 %
@@ -29,6 +26,7 @@
 % CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 % ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 % POSSIBILITY OF SUCH DAMAGE.;
+
 %
 
 classdef {{ model.name }}_mex_solver < handle
@@ -40,6 +38,7 @@ classdef {{ model.name }}_mex_solver < handle
         cost_ext_fun_type_e
         N
         name
+        code_gen_dir
     end % properties
 
 
@@ -56,13 +55,19 @@ classdef {{ model.name }}_mex_solver < handle
             obj.cost_ext_fun_type_e = '{{ cost.cost_ext_fun_type_e }}';
             obj.N = {{ dims.N }};
             obj.name = '{{ model.name }}';
+            obj.code_gen_dir = pwd();
         end
 
         % destructor
         function delete(obj)
+            disp("delete template...");
+            return_dir = pwd();
+            cd(obj.code_gen_dir);
             if ~isempty(obj.C_ocp)
                 acados_mex_free_{{ model.name }}(obj.C_ocp);
             end
+            cd(return_dir);
+            disp("done.");
         end
 
         % solve

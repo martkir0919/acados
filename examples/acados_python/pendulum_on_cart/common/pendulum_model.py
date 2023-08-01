@@ -1,8 +1,5 @@
 #
-# Copyright 2019 Gianluca Frison, Dimitris Kouzoupis, Robin Verschueren,
-# Andrea Zanelli, Niels van Duijkeren, Jonathan Frey, Tommaso Sartor,
-# Branimir Novoselnik, Rien Quirynen, Rezart Qelibari, Dang Doan,
-# Jonas Koenemann, Yutao Chen, Tobias Schöls, Jonas Schlagenhauf, Moritz Diehl
+# Copyright (c) The acados authors.
 #
 # This file is part of acados.
 #
@@ -36,7 +33,7 @@ from casadi import SX, vertcat, sin, cos, Function
 
 def export_pendulum_ode_model() -> AcadosModel:
 
-    model_name = 'pendulum_ode'
+    model_name = 'pendulum'
 
     # constants
     M = 1. # mass of the cart [kg] -> now estimated

@@ -1,8 +1,5 @@
 /*
- * Copyright 2019 Gianluca Frison, Dimitris Kouzoupis, Robin Verschueren,
- * Andrea Zanelli, Niels van Duijkeren, Jonathan Frey, Tommaso Sartor,
- * Branimir Novoselnik, Rien Quirynen, Rezart Qelibari, Dang Doan,
- * Jonas Koenemann, Yutao Chen, Tobias Schöls, Jonas Schlagenhauf, Moritz Diehl
+ * Copyright (c) The acados authors.
  *
  * This file is part of acados.
  *
@@ -577,7 +574,7 @@ static void d_cvt_dmat_args_to_casadi(struct blasfeo_dmat_args *in, double *out,
         {
             for (idx = idxcol[jj]; idx != idxcol[jj + 1]; idx++)
             {
-                ptr[0] = BLASFEO_DMATEL(A, ai + row[idx], aj + nrow);
+                ptr[0] = BLASFEO_DMATEL(A, ai + row[idx], aj + jj);
                 ptr++;
             }
         }

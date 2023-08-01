@@ -1,9 +1,6 @@
 # -*- coding: future_fstrings -*-
 #
-# Copyright 2019 Gianluca Frison, Dimitris Kouzoupis, Robin Verschueren,
-# Andrea Zanelli, Niels van Duijkeren, Jonathan Frey, Tommaso Sartor,
-# Branimir Novoselnik, Rien Quirynen, Rezart Qelibari, Dang Doan,
-# Jonas Koenemann, Yutao Chen, Tobias Schöls, Jonas Schlagenhauf, Moritz Diehl
+# Copyright (c) The acados authors.
 #
 # This file is part of acados.
 #
@@ -103,11 +100,16 @@ def plot_cstr(
         axes[i, 0].grid()
         axes[i, 0].set_xlim(ts[0], ts[-1])
 
+        if x_max is not None:
+            axes[i, 0].hlines(
+                x_max[i], ts[0], ts[-1], linestyles="dashed", alpha=0.8, color="k"
+            )
+
         if x_min is not None:
             axes[i, 0].set_ylim(bottom=x_min[i])
 
         if x_max is not None:
-            axes[i, 0].set_ylim(top=x_max[i])
+            axes[i, 0].set_ylim(top=x_max[i] * 1.05)
 
     for i in range(nu):
         for U, label in zip(U_list, labels_list):

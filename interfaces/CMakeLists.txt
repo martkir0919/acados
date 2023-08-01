@@ -1,8 +1,5 @@
 #
-# Copyright 2019 Gianluca Frison, Dimitris Kouzoupis, Robin Verschueren,
-# Andrea Zanelli, Niels van Duijkeren, Jonathan Frey, Tommaso Sartor,
-# Branimir Novoselnik, Rien Quirynen, Rezart Qelibari, Dang Doan,
-# Jonas Koenemann, Yutao Chen, Tobias Schöls, Jonas Schlagenhauf, Moritz Diehl
+# Copyright (c) The acados authors.
 #
 # This file is part of acados.
 #
@@ -34,42 +31,6 @@
 
 # MEX Template
 if(ACADOS_OCTAVE_TEMPLATE)
-        add_test(NAME octave_test_template_ocp_disc_dyn
-                COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_matlab_octave/test
-                octave --no-gui --no-window-system ./run_test_template_ocp_disc_dyn.m)
-
-        add_test(NAME octave_test_template_ocp_linear_dae
-                COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_matlab_octave/test
-                octave --no-gui --no-window-system ./run_test_template_ocp_linear_dae.m)
-
-        add_test(NAME octave_test_template_ocp_pendulum_auto
-                COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_matlab_octave/test
-                octave --no-gui --no-window-system ./run_test_template_ocp_pendulum_auto.m)
-
-        add_test(NAME octave_test_template_ocp_pendulum_exact_hess
-                COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_matlab_octave/test
-                octave --no-gui --no-window-system ./run_test_template_ocp_pendulum_exact_hess.m)
-
-        add_test(NAME octave_test_template_ocp_pendulum_ext_cost
-                COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_matlab_octave/test
-                octave --no-gui --no-window-system ./run_test_template_ocp_pendulum_ext_cost.m)
-
-        add_test(NAME octave_test_template_ocp_pendulum_gnsf
-                COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_matlab_octave/test
-                octave --no-gui --no-window-system ./run_test_template_ocp_pendulum_gnsf.m)
-
-        add_test(NAME octave_test_template_lin_mass_ocp
-                COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_matlab_octave/test
-                octave --no-gui --no-window-system ./run_test_template_lin_mass_ocp.m)
-
-        add_test(NAME octave_test_template_ocp_pendulum_nls
-                COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_matlab_octave/test
-                octave --no-gui --no-window-system ./run_test_template_ocp_pendulum_nls.m)
-
-        add_test(NAME octave_test_template_mhe_lorentz
-                COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_matlab_octave/test
-                octave --no-gui --no-window-system ./test_template_mhe_lorentz.m)
-
         add_test(NAME octave_test_target_selector
                 COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_matlab_octave/test
                 octave --no-gui --no-window-system ./test_target_selector.m)
@@ -180,6 +141,10 @@ add_test(NAME python_nonuniform_discretization_ocp_example
 add_test(NAME python_rti_loop_ocp_example
         COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_python/pendulum_on_cart/ocp
         python example_sqp_rti_loop.py)
+# Python Simulink
+add_test(NAME python_render_simulink_wrapper
+        COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_python/pendulum_on_cart/ocp
+        python simulink_example.py)
 
 add_test(NAME python_chain_ocp
         COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_python/chain_mass
@@ -239,6 +204,10 @@ add_test(NAME python_pendulum_ocp_cost_example
 add_test(NAME python_custom_update_example
         COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_python/pendulum_on_cart/custom_update
         python example_custom_rti_loop.py)
+
+add_test(NAME python_fast_zoro_example
+        COMMAND "${CMAKE_COMMAND}" -E chdir ${PROJECT_SOURCE_DIR}/examples/acados_python/zoRO_example
+        python pendulum_on_cart/minimal_example_zoro.py)
 
 # CMake test
 add_test(NAME python_pendulum_sim_example_cmake
