@@ -1159,6 +1159,11 @@ void ocp_nlp_opts_set(void *config_, void *opts_, const char *field, void* value
         config->qp_solver->opts_set(config->qp_solver, opts->qp_solver_opts,
                                     field+module_length+1, value);
     }
+    else if ( ptr_module!=NULL && (!strcmp(ptr_module, "reg")) )
+    {
+        config->regularize->opts_set(config->regularize, opts->regularize,
+                                    field+module_length+1, value);
+    }
     else // nlp opts
     {
         if (!strcmp(field, "reuse_workspace"))
@@ -2081,7 +2086,27 @@ void ocp_nlp_approximate_qp_matrices(ocp_nlp_config *config, ocp_nlp_dims *dims,
     int *nv = dims->nv;
     int *nx = dims->nx;
     int *nu = dims->nu;
-    int *ni = dims->ni;
+
+    /* prepare memory */
+    int cost_integration;
+    for (int i = 0; i < N; i++)
+    {
+        config->dynamics[i]->opts_get(config->dynamics[i], opts->dynamics[i],
+                                        "cost_computation", &cost_integration);
+        if (cost_integration)
+        {
+            // set pointers to cost function & gradient in integrator
+            double *cost_fun = config->cost[i]->memory_get_fun_ptr(mem->cost[i]);
+            struct blasfeo_dvec *cost_grad = config->cost[i]->memory_get_grad_ptr(mem->cost[i]);
+            struct blasfeo_dmat *W_chol = config->cost[i]->memory_get_W_chol_ptr(mem->cost[i]);
+            struct blasfeo_dvec *y_ref = config->cost[i]->model_get_y_ref_ptr(in->cost[i]);
+
+            config->dynamics[i]->memory_set(config->dynamics[i], dims->dynamics[i], mem->dynamics[i], "cost_grad", cost_grad);
+            config->dynamics[i]->memory_set(config->dynamics[i], dims->dynamics[i], mem->dynamics[i], "cost_fun", cost_fun);
+            config->dynamics[i]->memory_set(config->dynamics[i], dims->dynamics[i], mem->dynamics[i], "W_chol", W_chol);
+            config->dynamics[i]->memory_set(config->dynamics[i], dims->dynamics[i], mem->dynamics[i], "y_ref", y_ref);
+        }
+    }
 
     /* stage-wise multiple shooting lagrangian evaluation */
 
@@ -2428,20 +2453,20 @@ double ocp_nlp_evaluate_merit_fun(ocp_nlp_config *config, ocp_nlp_dims *dims,
 #if defined(ACADOS_WITH_OPENMP)
     #pragma omp parallel for
 #endif
+    for (int i=0; i<N; i++)
+    {
+        // dynamics: Note has to be first, because cost_integration might be used.
+        config->dynamics[i]->compute_fun(config->dynamics[i], dims->dynamics[i], in->dynamics[i],
+                                         opts->dynamics[i], mem->dynamics[i], work->dynamics[i]);
+    }
+#if defined(ACADOS_WITH_OPENMP)
+    #pragma omp parallel for
+#endif
     for (int i=0; i<=N; i++)
     {
         // cost
         config->cost[i]->compute_fun(config->cost[i], dims->cost[i], in->cost[i], opts->cost[i],
                                     mem->cost[i], work->cost[i]);
-    }
-#if defined(ACADOS_WITH_OPENMP)
-    #pragma omp parallel for
-#endif
-    for (int i=0; i<N; i++)
-    {
-        // dynamics
-        config->dynamics[i]->compute_fun(config->dynamics[i], dims->dynamics[i], in->dynamics[i],
-                                         opts->dynamics[i], mem->dynamics[i], work->dynamics[i]);
     }
 #if defined(ACADOS_WITH_OPENMP)
     #pragma omp parallel for
@@ -2693,6 +2718,8 @@ double ocp_nlp_line_search(ocp_nlp_config *config, ocp_nlp_dims *dims, ocp_nlp_i
             }
         }
     }
+    if (opts->globalization != FIXED_STEP)
+        printf("alpha %f\n", alpha);
 
     return alpha;
 }
@@ -2992,6 +3019,21 @@ void ocp_nlp_cost_compute(ocp_nlp_config *config, ocp_nlp_dims *dims, ocp_nlp_in
 #endif
     for (int i = 0; i <= N; i++)
     {
+        if (i < N)
+        {
+            int cost_integration;
+            config->dynamics[i]->opts_get(config->dynamics[i], opts->dynamics[i], "cost_computation", &cost_integration);
+
+            if (cost_integration)
+            {
+                // evaluate at out, instead tmp_out;
+                config->dynamics[i]->memory_set_tmp_ux_ptr(out->ux+i, mem->dynamics[i]);
+                // evaluate: TODO, where to put cost?
+                config->dynamics[i]->compute_fun(config->dynamics[i], dims->dynamics[i],
+                        in->dynamics[i], opts->dynamics[i], mem->dynamics[i], work->dynamics[i]);
+            }
+        }
+
         // set pointers
         // NOTE(oj): the cost compute function takes the tmp_ux_ptr as input,
         //  since it is also used for globalization,
