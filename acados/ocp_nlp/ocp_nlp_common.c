@@ -2098,13 +2098,13 @@ void ocp_nlp_approximate_qp_matrices(ocp_nlp_config *config, ocp_nlp_dims *dims,
             // set pointers to cost function & gradient in integrator
             double *cost_fun = config->cost[i]->memory_get_fun_ptr(mem->cost[i]);
             struct blasfeo_dvec *cost_grad = config->cost[i]->memory_get_grad_ptr(mem->cost[i]);
-            struct blasfeo_dmat *W_chol = config->cost[i]->memory_get_W_chol_ptr(mem->cost[i]);
             struct blasfeo_dvec *y_ref = config->cost[i]->model_get_y_ref_ptr(in->cost[i]);
+            struct blasfeo_dmat *W_chol = config->cost[i]->memory_get_W_chol_ptr(mem->cost[i]);
 
             config->dynamics[i]->memory_set(config->dynamics[i], dims->dynamics[i], mem->dynamics[i], "cost_grad", cost_grad);
             config->dynamics[i]->memory_set(config->dynamics[i], dims->dynamics[i], mem->dynamics[i], "cost_fun", cost_fun);
-            config->dynamics[i]->memory_set(config->dynamics[i], dims->dynamics[i], mem->dynamics[i], "W_chol", W_chol);
             config->dynamics[i]->memory_set(config->dynamics[i], dims->dynamics[i], mem->dynamics[i], "y_ref", y_ref);
+            config->dynamics[i]->memory_set(config->dynamics[i], dims->dynamics[i], mem->dynamics[i], "W_chol", W_chol);
         }
     }
 
@@ -2534,7 +2534,7 @@ double ocp_nlp_evaluate_merit_fun(ocp_nlp_config *config, ocp_nlp_dims *dims,
 
 double ocp_nlp_line_search(ocp_nlp_config *config, ocp_nlp_dims *dims, ocp_nlp_in *in,
             ocp_nlp_out *out, ocp_nlp_opts *opts, ocp_nlp_memory *mem, ocp_nlp_workspace *work,
-            int check_early_termination)
+            int check_early_termination, int sqp_iter)
 {
     int i, j;
 
@@ -2570,7 +2570,7 @@ double ocp_nlp_line_search(ocp_nlp_config *config, ocp_nlp_dims *dims, ocp_nlp_i
     //        }
 
         /* modify/initialize merit function weights (Leineweber1999 M5.1, p.89) */
-        if (mem->sqp_iter[0]==0)
+        if (sqp_iter==0)
         {
             // initialize weights
             // equality merit weights = abs( eq multipliers of qp_sol )
@@ -2591,7 +2591,7 @@ double ocp_nlp_line_search(ocp_nlp_config *config, ocp_nlp_dims *dims, ocp_nlp_i
         else
         {
             // update weights
-            // printf("merit fun: update weights, sqp_iter = %d\n", mem->sqp_iter[0]);
+            // printf("merit fun: update weights, sqp_iter = %d\n", sqp_iter);
             for (i = 0; i < N; i++)
             {
                 for(j=0; j<nx[i+1]; j++)
@@ -2616,7 +2616,7 @@ double ocp_nlp_line_search(ocp_nlp_config *config, ocp_nlp_dims *dims, ocp_nlp_i
             }
         }
 
-        if (1) // (mem->sqp_iter[0]!=0) // TODO: why does Leineweber do full step in first SQP iter?
+        if (1) // (sqp_iter!=0) // TODO: why does Leineweber do full step in first SQP iter?
         {
             double merit_fun0 = ocp_nlp_evaluate_merit_fun(config, dims, in, out, opts, mem, work);
 
