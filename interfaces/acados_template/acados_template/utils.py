@@ -35,7 +35,11 @@ import shutil
 import sys
 import urllib.request
 from subprocess import DEVNULL, STDOUT, call
-
+if os.name == 'nt':
+    from ctypes import wintypes
+    from ctypes import WinDLL as DllLoader
+else:
+    from ctypes import CDLL as DllLoader
 import numpy as np
 from casadi import DM, MX, SX, CasadiMeta, Function
 
@@ -99,6 +103,29 @@ def get_tera_exec_path():
     return TERA_PATH
 
 
+def acados_lib_is_compiled_with_openmp(acados_lib: DllLoader, verbose: bool) -> bool:
+    # find out if acados was compiled with OpenMP
+    try:
+        acados_lib_uses_omp = getattr(acados_lib, 'omp_get_thread_num') is not None
+    except AttributeError as e:
+        acados_lib_uses_omp = False
+    if verbose:
+        if acados_lib_uses_omp:
+            print('acados was compiled with OpenMP.')
+        else:
+            print('acados was compiled without OpenMP.')
+    return acados_lib_uses_omp
+
+
+def get_shared_lib(shared_lib_name: str, winmode = None) -> DllLoader:
+    if winmode is not None:
+        shared_lib = DllLoader(shared_lib_name, winmode=winmode)
+    else:
+        # for compatibility with older python versions
+        shared_lib = DllLoader(shared_lib_name)
+    return shared_lib
+
+
 def check_casadi_version():
     casadi_version = CasadiMeta.version()
     if casadi_version in ALLOWED_CASADI_VERSIONS:
@@ -146,17 +173,11 @@ def is_empty(x):
     if isinstance(x, (MX, SX, DM)):
         return x.is_empty()
     elif isinstance(x, np.ndarray):
-        if np.prod(x.shape) == 0:
-            return True
-        else:
-            return False
-    elif x == None:
+        return True if np.prod(x.shape) == 0 else False
+    elif x is None:
         return True
     elif isinstance(x, (set, list)):
-        if len(x)==0:
-            return True
-        else:
-            return False
+        return True if len(x) == 0 else False
     else:
         raise Exception("is_empty expects one of the following types: casadi.MX, casadi.SX, "
                         + "None, numpy array empty list, set. Got: " + str(type(x)))
@@ -165,6 +186,10 @@ def is_empty(x):
 def casadi_length(x):
     if isinstance(x, (MX, SX, DM)):
         return int(np.prod(x.shape))
+    elif x is None:
+        return 0
+    elif isinstance(x, list):
+        return len(x)
     else:
         raise Exception("casadi_length expects one of the following types: casadi.MX, casadi.SX."
                         + " Got: " + str(type(x)))
@@ -263,11 +288,17 @@ def render_template(in_file, out_file, output_dir, json_path, template_glob=None
         os_cmd = os_cmd.replace('\'', '\"')
 
     status = os.system(os_cmd)
-    if (status != 0):
+    if status != 0:
         raise Exception(f'Rendering of {in_file} failed!\n\nAttempted to execute OS command:\n{os_cmd}\n\n')
 
     os.chdir(cwd)
 
+
+def casadi_expr_to_string(expr) -> str:
+    string = ''
+    for ii in range(casadi_length(expr)):
+        string += f"{expr[ii,:]}\n"
+    return string
 
 ## Conversion functions
 def make_object_json_dumpable(input):
@@ -276,6 +307,8 @@ def make_object_json_dumpable(input):
     elif isinstance(input, (SX)):
         try:
             return input.serialize()
+            # for more readable json output:
+            # return casadi_expr_to_string(input)
         except: # for older CasADi versions
             return ''
     elif isinstance(input, (MX)):
@@ -315,9 +348,9 @@ def J_to_idx(J):
         this_idx = np.nonzero(J[i,:])[0]
         if len(this_idx) != 1:
             raise Exception('Invalid J matrix structure detected, ' \
-                'must contain one nonzero element per row.')
+                'must contain exactly one nonzero element per row.')
         if this_idx.size > 0 and J[i,this_idx[0]] != 1:
-            raise Exception('J matrices can only contain 1s.')
+            raise Exception('J matrices can only contain 1 and 0 entries.')
         idx[i] = this_idx[0]
     return idx
 
@@ -341,6 +374,12 @@ def J_to_idx_slack(J):
     if not i_idx == ncol:
             raise Exception('J_to_idx_slack: J must contain a 1 in every column!')
     return idx
+
+
+def check_if_nparray_and_flatten(val, name):
+    if not isinstance(val, np.ndarray):
+        raise Exception(f"{name} must be a numpy array, got {type(val)}")
+    return val.reshape(-1)
 
 
 def print_J_to_idx_note():
@@ -378,16 +417,6 @@ def acados_dae_model_json_dump(model):
 def set_up_imported_gnsf_model(acados_ocp):
 
     gnsf = acados_ocp.gnsf_model
-
-    # check CasADi version
-    # dump_casadi_version = gnsf['casadi_version']
-    # casadi_version = CasadiMeta.version()
-
-    # if not casadi_version == dump_casadi_version:
-    #     print("WARNING: GNSF model was dumped with another CasADi version.\n"
-    #             + "This might yield errors. Please use the same version for compatibility, serialize version: "
-    #             + dump_casadi_version + " current Python CasADi verison: " + casadi_version)
-    #     input("Press any key to attempt to continue...")
 
     # load model
     phi_fun = Function.deserialize(gnsf['phi_fun'])

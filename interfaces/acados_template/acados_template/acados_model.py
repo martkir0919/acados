@@ -222,6 +222,8 @@ class AcadosModel():
         """
         Number of original control inputs (before polynomial control augmentation); Default: :code:`None`
         """
+        self.t0 = None
+        """CasADi variable representing the start time of an interval; Default: :code:`None`"""
         self.__x_labels = None
         self.__u_labels = None
         self.__t_label = "t"
@@ -269,6 +271,14 @@ class AcadosModel():
         else:
             raise Exception(f"model.x must be casadi.SX or casadi.MX, got {type(self.x)}")
 
+    def get_casadi_zeros(self):
+        if isinstance(self.x, MX):
+            return MX.zeros
+        elif isinstance(self.x, SX):
+            return SX.zeros
+        else:
+            raise Exception(f"model.x must be casadi.SX or casadi.MX, got {type(self.x)}")
+
     def make_consistent(self, dims: Union[AcadosOcpDims, AcadosSimDims]) -> None:
 
         casadi_symbol = self.get_casadi_symbol()
@@ -287,6 +297,7 @@ class AcadosModel():
         # nu
         if is_empty(self.u):
             dims.nu = 0
+            self.u = casadi_symbol('u', 0, 1)
         else:
             dims.nu = casadi_length(self.u)
 
@@ -305,7 +316,22 @@ class AcadosModel():
         return
 
 
+    def substitute(self, var: Union[ca.SX, ca.MX], expr_new: Union[ca.SX, ca.MX]) -> None:
+        """
+        Substitutes the variables var with expr_new in all symbolic CasADi expressions within AcadosModel
+        """
+        for attr, value in self.__dict__.items():
+            if isinstance(value, (ca.SX, ca.MX)):
+                new = ca.substitute(value, var, expr_new)
+                setattr(self, attr, new)
+        return
+
+
     def augment_model_with_polynomial_control(self, degree: int) -> None:
+        print("Deprecation warning: augment_model_with_polynomial_control() is deprecated and has been renamed to reformulate_with_polynomial_control().")
+        self.reformulate_with_polynomial_control()
+
+    def reformulate_with_polynomial_control(self, degree: int) -> None:
         """
         Augment the model with polynomial control.
 
@@ -340,14 +366,7 @@ class AcadosModel():
 
         evaluate_polynomial_u_fun = ca.Function("evaluate_polynomial_u", [u_coeff, t], [u_new])
 
-        if self.f_impl_expr is not None:
-            self.f_impl_expr = ca.substitute(self.f_impl_expr, u_old, u_new)
-        if self.f_expl_expr is not None:
-            self.f_expl_expr = ca.substitute(self.f_expl_expr, u_old, u_new)
-        if self.cost_y_expr is not None:
-            self.cost_y_expr = ca.substitute(self.cost_y_expr, u_old, u_new)
-        if self.cost_y_expr_0 is not None:
-            self.cost_y_expr_0 = ca.substitute(self.cost_y_expr_0, u_old, u_new)
+        self.substitute(u_old, u_new)
 
         self.u = u_coeff
         self.nu_original = nu_original

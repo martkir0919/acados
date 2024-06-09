@@ -1,4 +1,3 @@
-#!/bin/bash
 #
 # Copyright (c) The acados authors.
 #
@@ -29,43 +28,43 @@
 # POSSIBILITY OF SUCH DAMAGE.;
 #
 
+from acados_template import AcadosModel
+from casadi import SX, vertcat
 
-if [ "${SECTION}" = 'before_install' ]; then
-    # export GENERIC target for osx
-    export BLASFEO_TARGET=GENERIC;
-    export HPIPM_TARGET=GENERIC;
+def export_rockit_hello_world_model() -> AcadosModel:
 
-    export ACADOS_INSTALL_DIR="$(pwd)";
-    export ACADOS_SOURCE_DIR="$(pwd)";
+    model_name = 'rockit_hello_world_model'
 
-elif [ "${SECTION}" = 'install' ]; then
-    source "${SCRIPT_DIR}/install_ccache.sh";
-    source "${SHARED_SCRIPT_DIR}/install_eigen.sh";
-    source "${SCRIPT_DIR}/install_python.sh";
+    # set up states & controls
+    x1 = SX.sym('x1')
+    x2 = SX.sym('x2')
 
-    if  [[ "${ACADOS_MATLAB}" = 'ON' || "${ACADOS_OCTAVE}" = 'ON' ]] ||
-        [[ "${ACADOS_PYTHON}" = 'ON' ]];
-        then
-        source "${SCRIPT_DIR}/install_casadi.sh";
-    fi
+    x = vertcat(x1, x2)
 
-    if [[ "${ACADOS_PYTHON}" = 'ON' ]] ;
-    then
-        source "${SCRIPT_DIR}/install_python_dependencies.sh";
-        pushd examples/acados_template/python/test;
-            export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$ACADOS_INSTALL_DIR/lib:$MODEL_FOLDER
-        popd;
-    fi
+    u = SX.sym('u')
 
-    if [[ "${ACADOS_MATLAB}" = 'ON' ]];
-    then
-        source "${SHARED_SCRIPT_DIR}/install_matlab.sh";
-    fi
+    e = 1 - x2**2
 
-elif [ "${SECTION}" = 'script' ]; then
-    source "${SHARED_SCRIPT_DIR}/script_acados_release.sh";
+    # xdot
+    x1_dot = SX.sym('x1_dot')
+    x2_dot = SX.sym('x2_dot')
 
-elif [ "${SECTION}" = 'after_success' ]; then
-    source "${SHARED_SCRIPT_DIR}/after_success_package_release.sh";
+    xdot = vertcat(x1_dot, x2_dot)
 
-fi
+    # dynamics
+    f_expl = vertcat(e * x1 - x2 + u,
+                     x1)
+
+    f_impl = xdot - f_expl
+
+    model = AcadosModel()
+
+    model.f_impl_expr = f_impl
+    model.f_expl_expr = f_expl
+    model.x = x
+    model.xdot = xdot
+    model.u = u
+    model.name = model_name
+
+    return model
+

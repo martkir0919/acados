@@ -29,12 +29,10 @@
 # POSSIBILITY OF SUCH DAMAGE.;
 #
 
-TERA_RENDERER_VERSION='0.0.34';
-_TERA_RENDERER_GITHUB_RELEASES="https://github.com/acados/tera_renderer/releases/download/v${TERA_RENDERER_VERSION}/";
-TERA_RENDERER_URL="${_TERA_RENDERER_GITHUB_RELEASES}/t_renderer-v${TERA_RENDERER_VERSION}-osx";
-
-mkdir -p bin;
-pushd bin;
-	wget -O t_renderer "${TERA_RENDERER_URL}";
-	chmod +x t_renderer
-popd;
+echo "ACADOS_SOURCE_DIR=$1/acados" >> $GITHUB_ENV
+echo "ACADOS_INSTALL_DIR=$1/acados" >> $GITHUB_ENV
+echo "LD_LIBRARY_PATH=$1/acados/lib" >> $GITHUB_ENV
+echo "MATLABPATH=$MATLABPATH:$1/acados/interfaces/acados_matlab_octave:$1/acados/interfaces/acados_matlab_octave/acados_template_mex:${1}/acados/external/casadi-matlab" >> $GITHUB_ENV
+echo "OCTAVE_PATH=$OCTAVE_PATH:${1}/acados/interfaces/acados_matlab_octave:${1}/acados/interfaces/acados_matlab_octave/acados_template_mex:${1}/acados/external/casadi-octave" >> $GITHUB_ENV
+echo "LD_RUN_PATH=${1}/acados/examples/acados_matlab_octave/test/c_generated_code" >> $GITHUB_ENV
+echo "ENV_RUN=true" >> $GITHUB_ENV

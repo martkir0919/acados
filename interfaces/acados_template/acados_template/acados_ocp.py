@@ -152,19 +152,7 @@ class AcadosOcp:
         ## cost
         # initial stage - if not set, copy fields from path constraints
         if cost.cost_type_0 is None:
-            cost.cost_type_0 = cost.cost_type
-            cost.W_0 = cost.W
-            cost.Vx_0 = cost.Vx
-            cost.Vu_0 = cost.Vu
-            cost.Vz_0 = cost.Vz
-            cost.yref_0 = cost.yref
-            cost.cost_ext_fun_type_0 = cost.cost_ext_fun_type
-            model.cost_y_expr_0 = model.cost_y_expr
-            model.cost_expr_ext_cost_0 = model.cost_expr_ext_cost
-            model.cost_expr_ext_cost_custom_hess_0 = model.cost_expr_ext_cost_custom_hess
-
-            model.cost_psi_expr_0 = model.cost_psi_expr
-            model.cost_r_in_psi_expr_0 = model.cost_r_in_psi_expr
+            self.copy_path_cost_to_stage_0()
 
         if cost.cost_type_0 == 'LINEAR_LS':
             check_if_square(cost.W_0, 'W_0')
@@ -321,7 +309,7 @@ class AcadosOcp:
         supports_cost_integration = lambda type : type in ['NONLINEAR_LS', 'CONVEX_OVER_NONLINEAR']
         if opts.cost_discretization == 'INTEGRATOR' and \
             any([not supports_cost_integration(cost) for cost in [cost.cost_type_0, cost.cost_type, cost.cost_type_e]]):
-            raise Exception('cost_discretization == INTEGRATOR only works with NONLINEAR_LS costs.')
+            raise Exception('cost_discretization == INTEGRATOR only works with cost in ["NONLINEAR_LS", "CONVEX_OVER_NONLINEAR"] costs.')
 
         ## constraints
         # initial
@@ -815,6 +803,17 @@ class AcadosOcp:
                 if constraint is not None and any(ca.which_depends(constraint, model.p)):
                     raise Exception(f'with_value_sens_wrt_params is only implemented if constraints depend not on parameters. Got parameter dependency for {horizon_type} constraint.')
 
+        if opts.qp_solver_cond_N is None:
+            opts.qp_solver_cond_N = dims.N
+
+        if opts.nlp_solver_type == "DDP":
+            if opts.qp_solver != "PARTIAL_CONDENSING_HPIPM" or opts.qp_solver_cond_N != dims.N:
+                raise Exception(f'DDP solver only supported for PARTIAL_CONDENSING_HPIPM with qp_solver_cond_N == N, got qp solver {opts.qp_solver} and qp_solver_cond_N {opts.qp_solver_cond_N}, N {dims.N}.')
+            if any([dims.nbu, dims.nbx, dims.ng, dims.nh, dims.nphi]):
+                raise Exception('DDP only supports initial state constraints, got path constraints.')
+            if  any([dims.ng_e, dims.nphi_e, dims.nh_e]):
+                raise Exception('DDP only supports initial state constraints, got terminal constraints.')
+
         # zoRO
         if self.zoro_description is not None:
             if not isinstance(self.zoro_description, ZoroDescription):
@@ -985,6 +984,26 @@ class AcadosOcp:
         return ocp_dict
 
 
+    def copy_path_cost_to_stage_0(self):
+        """Set all cost definitions at stage 0 to the corresponding path cost definitions."""
+        cost = self.cost
+        model = self.model
+
+        cost.cost_type_0 = cost.cost_type
+        cost.W_0 = cost.W
+        cost.Vx_0 = cost.Vx
+        cost.Vu_0 = cost.Vu
+        cost.Vz_0 = cost.Vz
+        cost.yref_0 = cost.yref
+        cost.cost_ext_fun_type_0 = cost.cost_ext_fun_type
+
+        model.cost_y_expr_0 = model.cost_y_expr
+        model.cost_expr_ext_cost_0 = model.cost_expr_ext_cost
+        model.cost_expr_ext_cost_custom_hess_0 = model.cost_expr_ext_cost_custom_hess
+        model.cost_psi_expr_0 = model.cost_psi_expr
+        model.cost_r_in_psi_expr_0 = model.cost_r_in_psi_expr
+        return
+
     def translate_nls_cost_to_conl(self):
         """
         Translates a NONLINEAR_LS cost to a CONVEX_OVER_NONLINEAR cost.
@@ -1040,6 +1059,7 @@ class AcadosOcp:
         upper_bound: Optional[float],
         lower_bound: Optional[float],
         residual_name: str = "new_residual",
+        constraint_type: str = "path",
     ) -> None:
         """
         Formulate a constraint as an L2 penalty and add it to the current cost.
@@ -1052,21 +1072,52 @@ class AcadosOcp:
 
         # compute violation expression
         violation_expr = 0.0
+        y_ref_new = np.zeros(1)
         if upper_bound is not None:
             violation_expr = ca.fmax(violation_expr, (constr_expr - upper_bound))
         if lower_bound is not None:
             violation_expr = ca.fmax(violation_expr, (lower_bound - constr_expr))
 
         # add penalty as cost
-        self.cost.yref = np.concatenate((self.cost.yref, np.zeros(1)))
-        self.model.cost_y_expr = ca.vertcat(self.model.cost_y_expr, violation_expr)
-        if self.cost.cost_type == "NONLINEAR_LS":
-            self.cost.W = block_diag(self.cost.W, weight)
-        elif self.cost.cost_type == "CONVEX_OVER_NONLINEAR":
-            new_residual = casadi_symbol(residual_name, constr_expr.shape)
-            self.model.cost_r_in_psi_expr = ca.vertcat(self.model.cost_r_in_psi_expr, new_residual)
-            self.model.cost_psi_expr += .5 * weight * new_residual**2
-
+        if constraint_type == "path":
+            self.cost.yref = np.concatenate((self.cost.yref, y_ref_new))
+            self.model.cost_y_expr = ca.vertcat(self.model.cost_y_expr, violation_expr)
+            if self.cost.cost_type == "NONLINEAR_LS":
+                self.cost.W = block_diag(self.cost.W, weight)
+            elif self.cost.cost_type == "CONVEX_OVER_NONLINEAR":
+                new_residual = casadi_symbol(residual_name, constr_expr.shape)
+                self.model.cost_r_in_psi_expr = ca.vertcat(self.model.cost_r_in_psi_expr, new_residual)
+                self.model.cost_psi_expr += .5 * weight * new_residual**2
+            elif self.cost.cost_type == "EXTERNAL":
+                self.model.cost_expr_ext_cost += .5 * weight * violation_expr**2
+            else:
+                raise NotImplementedError(f"formulate_constraint_as_L2_penalty not implemented for path cost with cost_type {self.cost.cost_type}.")
+        elif constraint_type == "initial":
+            self.cost.yref_0 = np.concatenate((self.cost.yref_0, y_ref_new))
+            self.model.cost_y_expr_0 = ca.vertcat(self.model.cost_y_expr_0, violation_expr)
+            if self.cost.cost_type_0 == "NONLINEAR_LS":
+                self.cost.W_0 = block_diag(self.cost.W_0, weight)
+            elif self.cost.cost_type_0 == "CONVEX_OVER_NONLINEAR":
+                new_residual = casadi_symbol(residual_name, constr_expr.shape)
+                self.model.cost_r_in_psi_expr_0 = ca.vertcat(self.model.cost_r_in_psi_expr_0, new_residual)
+                self.model.cost_psi_expr_0 += .5 * weight * new_residual**2
+            elif self.cost.cost_type_0 == "EXTERNAL":
+                self.model.cost_expr_ext_cost_0 += .5 * weight * violation_expr**2
+            else:
+                raise NotImplementedError(f"formulate_constraint_as_L2_penalty not implemented for initial cost with cost_type_0 {self.cost.cost_type_0}.")
+        elif constraint_type == "terminal":
+            self.cost.yref_e = np.concatenate((self.cost.yref_e, y_ref_new))
+            self.model.cost_y_expr_e = ca.vertcat(self.model.cost_y_expr_e, violation_expr)
+            if self.cost.cost_type_e == "NONLINEAR_LS":
+                self.cost.W_e = block_diag(self.cost.W_e, weight)
+            elif self.cost.cost_type_e == "CONVEX_OVER_NONLINEAR":
+                new_residual = casadi_symbol(residual_name, constr_expr.shape)
+                self.model.cost_r_in_psi_expr_e = ca.vertcat(self.model.cost_r_in_psi_expr_e, new_residual)
+                self.model.cost_psi_expr_e += .5 * weight * new_residual**2
+            elif self.cost.cost_type_e == "EXTERNAL":
+                self.model.cost_expr_ext_cost_e += .5 * weight * violation_expr**2
+            else:
+                raise NotImplementedError(f"formulate_constraint_as_L2_penalty not implemented for terminal cost with cost_type_e {self.cost.cost_type_e}.")
         return
 
 
@@ -1095,12 +1146,10 @@ class AcadosOcp:
             casadi_symbol = ca.SX.sym
             casadi_zeros = ca.SX.zeros
 
-
         # if (upper_bound is None or lower_bound is None):
         #     raise NotImplementedError("only symmetric Huber for now")
         if upper_bound is None and lower_bound is None:
             raise ValueError("Either upper or lower bound must be provided.")
-
 
         if self.cost.cost_type != "CONVEX_OVER_NONLINEAR":
             raise Exception("Huber penalty is only supported for CONVEX_OVER_NONLINEAR cost type.")
@@ -1175,4 +1224,138 @@ class AcadosOcp:
             self.constraints.lg = ca.vertcat(self.constraints.lg, lg)
             self.constraints.ug = ca.vertcat(self.constraints.ug, ug)
 
+        return
+
+    def translate_to_feasibility_problem(self,
+                                        keep_x0: bool=False,
+                                        keep_cost: bool=False,
+                                        parametric_x0: bool=False) -> None:
+        """
+        Translate an OCP to a feasibility problem by removing all cost term and then formulating all constraints as L2 penalties.
+
+        Note: all weights are set to 1.0 for now.
+        Options to specify weights should be implemented later for advanced use cases.
+
+        :param keep_x0: if True, x0 constraint is kept as a constraint
+        :param keep_cost: if True, cost is not removed before formulating constraints as penalties
+        :param parametric_x0: if True, replace the value of the initial state constraint with a parameter that is appended to the model parameters.
+        """
+
+        self.model.make_consistent(self.dims) # sets the correct MX/SX defaults
+        model = self.model
+        cost = self.cost
+        constraints = self.constraints
+        new_constraints = AcadosOcpConstraints()
+
+        if keep_cost:
+            # initial stage - if not set, copy fields from path constraints
+            if cost.cost_type_0 is None:
+                self.copy_path_cost_to_stage_0()
+        else:
+            # set cost to zero
+            cost.cost_type = "NONLINEAR_LS"
+            cost.cost_type_e = "NONLINEAR_LS"
+            cost.cost_type_0 = "NONLINEAR_LS"
+
+            cost.yref = np.array([])
+            cost.yref_0 = np.array([])
+            cost.yref_e = np.array([])
+
+            zeros = model.get_casadi_zeros()
+            model.cost_y_expr = zeros((0, 0))
+            model.cost_y_expr_e = zeros((0, 0))
+            model.cost_y_expr_0 = zeros((0, 0))
+
+            cost.W = np.zeros((0, 0))
+            cost.W_e = np.zeros((0, 0))
+            cost.W_0 = np.zeros((0, 0))
+
+        expr_bound_list = [
+            (model.x[constraints.idxbx], constraints.lbx, constraints.ubx),
+            (model.u[constraints.idxbu], constraints.lbu, constraints.ubu),
+            (model.con_h_expr, constraints.lh, constraints.uh),
+        ]
+
+        if casadi_length(model.con_phi_expr) > 0:
+            phi_o_r_expr = ca.substitute(model.con_phi_expr, model.con_r_in_phi, model.con_r_expr)
+            expr_bound_list.append((phi_o_r_expr, constraints.lphi, constraints.uphi))
+            # NOTE: for now, we don't exploit convex over nonlinear structure of phi
+
+        for constr_expr, lower_bound, upper_bound in expr_bound_list:
+            for i in range(casadi_length(constr_expr)):
+                self.formulate_constraint_as_L2_penalty(constr_expr[i], weight=1.0, upper_bound=upper_bound[i], lower_bound=lower_bound[i])
+
+        model.con_h_expr = None
+        model.con_phi_expr = None
+        model.con_r_expr = None
+        model.con_r_in_phi = None
+
+        # formulate **terminal** constraints as L2 penalties
+        expr_bound_list_e = [
+            (model.x[constraints.idxbx_e], constraints.lbx_e, constraints.ubx_e),
+            (model.con_h_expr_e, constraints.lh_e, constraints.uh_e),
+        ]
+
+        if casadi_length(model.con_phi_expr_e) > 0:
+            phi_o_r_expr_e = ca.substitute(model.con_phi_expr_e, model.con_r_in_phi_e, model.con_r_expr_e)
+            expr_bound_list_e.append((phi_o_r_expr_e, constraints.lphi_e, constraints.uphi_e))
+            # NOTE: for now, we don't exploit convex over nonlinear structure of phi
+
+        for constr_expr, lower_bound, upper_bound in expr_bound_list_e:
+            for i in range(casadi_length(constr_expr)):
+                self.formulate_constraint_as_L2_penalty(constr_expr[i], weight=1.0, upper_bound=upper_bound[i], lower_bound=lower_bound[i], constraint_type="terminal")
+
+        model.con_h_expr_e = None
+        model.con_phi_expr_e = None
+        model.con_r_expr_e = None
+        model.con_r_in_phi_e = None
+
+        # Convert initial conditions to l2 penalty
+        # Expressions for control constraints on u
+        expr_bound_list_0 = [
+            (model.u[constraints.idxbu], constraints.lbu, constraints.ubu),
+            (model.con_h_expr_0, constraints.lh_0, constraints.uh_0),
+        ]
+
+        # initial state constraint
+        if (keep_x0 or parametric_x0) and not constraints.has_x0:
+            raise NotImplementedError("translate_to_feasibility_problem: options keep_x0, parametric_x0 not defined for problems without x0 constraints.")
+        if parametric_x0 and keep_x0:
+            raise NotImplementedError("translate_to_feasibility_problem: parametric_x0 and keep cannot both be True.")
+        if keep_x0:
+            new_constraints.x0 = constraints.lbx_0
+        elif parametric_x0:
+            symbol = model.get_casadi_symbol()
+            param_x0 = symbol('param_x0', len(constraints.idxbx_0))
+            new_params = constraints.lbx_0
+            model.p = ca.vertcat(model.p, param_x0)
+            self.parameter_values = np.concatenate((self.parameter_values, new_params))
+            expr_bound_list_0.append((model.x[constraints.idxbx_0], param_x0, param_x0))
+        else:
+            expr_bound_list_0.append((model.x[constraints.idxbx_0], constraints.lbx_0, constraints.ubx_0))
+
+        if casadi_length(model.con_phi_expr_0) > 0:
+            phi_o_r_expr_0 = ca.substitute(model.con_phi_expr_0, model.con_r_in_phi_0, model.con_r_expr_0)
+            expr_bound_list_0.append((phi_o_r_expr_0, constraints.lphi_0, constraints.uphi_0))
+            # NOTE: for now, we don't exploit convex over nonlinear structure of phi
+
+        for constr_expr, lower_bound, upper_bound in expr_bound_list_0:
+            for i in range(casadi_length(constr_expr)):
+                self.formulate_constraint_as_L2_penalty(constr_expr[i], weight=1.0, upper_bound=upper_bound[i], lower_bound=lower_bound[i], constraint_type="initial")
+
+        model.con_h_expr_0 = None
+        model.con_phi_expr_0 = None
+        model.con_r_expr_0 = None
+        model.con_r_in_phi_0 = None
+
+        # delete constraint fromulation from constraints object
+        self.constraints = new_constraints
+
+    def augment_with_t0_param(self) -> None:
+        """Add a parameter t0 to the model and set it to 0.0."""
+        if self.model.t0 is not None:
+            raise Exception("Parameter t0 is already present in the model.")
+        self.model.t0 = ca.SX.sym("t0")
+        self.model.p = ca.vertcat(self.model.p, self.model.t0)
+        self.parameter_values = np.append(self.parameter_values, [0.0])
         return

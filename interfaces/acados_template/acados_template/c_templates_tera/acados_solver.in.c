@@ -37,6 +37,11 @@
 #include "acados_c/ocp_nlp_interface.h"
 #include "acados_c/external_function_interface.h"
 
+{%- if solver_options.num_threads_in_batch_solve > 1 %}
+// openmp
+#include <omp.h>
+{%- endif %}
+
 // example specific
 #include "{{ model.name }}_model/{{ model.name }}_model.h"
 
@@ -2226,12 +2231,17 @@ void {{ model.name }}_acados_create_6_set_opts({{ model.name }}_solver_capsule* 
     int nlp_solver_ext_qp_res = {{ solver_options.nlp_solver_ext_qp_res }};
     ocp_nlp_solver_opts_set(nlp_config, nlp_opts, "ext_qp_res", &nlp_solver_ext_qp_res);
 
+{%- if solver_options.nlp_solver_type == "SQP" %}
+    int log_primal_step_norm = {{ solver_options.log_primal_step_norm }};
+    ocp_nlp_solver_opts_set(nlp_config, nlp_opts, "log_primal_step_norm", &log_primal_step_norm);
+{%- endif %}
+
 {%- if solver_options.qp_solver is containing("HPIPM") %}
     // set HPIPM mode: should be done before setting other QP solver options
     ocp_nlp_solver_opts_set(nlp_config, nlp_opts, "qp_hpipm_mode", "{{ solver_options.hpipm_mode }}");
 {%- endif %}
 
-{% if solver_options.nlp_solver_type == "SQP" %}
+{% if solver_options.nlp_solver_type == "SQP" or solver_options.nlp_solver_type == "DDP" %}
     // set SQP specific options
     double nlp_solver_tol_stat = {{ solver_options.nlp_solver_tol_stat }};
     ocp_nlp_solver_opts_set(nlp_config, nlp_opts, "tol_stat", &nlp_solver_tol_stat);
@@ -2314,6 +2324,23 @@ void {{ model.name }}_acados_create_6_set_opts({{ model.name }}_solver_capsule* 
 {%- if cost.cost_type_e == "EXTERNAL" %}
     ocp_nlp_solver_opts_set_at_stage(nlp_config, nlp_opts, N, "cost_numerical_hessian", &ext_cost_num_hess);
 {%- endif %}
+
+{% if solver_options.nlp_solver_type == "DDP" %}
+    // set SQP specific options
+    bool with_adaptive_levenberg_marquardt = {{ solver_options.with_adaptive_levenberg_marquardt }};
+    ocp_nlp_solver_opts_set(nlp_config, nlp_opts, "with_adaptive_levenberg_marquardt", &with_adaptive_levenberg_marquardt);
+
+    double adaptive_levenberg_marquardt_lam = {{ solver_options.adaptive_levenberg_marquardt_lam }};
+    ocp_nlp_solver_opts_set(nlp_config, nlp_opts, "adaptive_levenberg_marquardt_lam", &adaptive_levenberg_marquardt_lam);
+
+    double adaptive_levenberg_marquardt_mu_min = {{ solver_options.adaptive_levenberg_marquardt_mu_min }};
+    ocp_nlp_solver_opts_set(nlp_config, nlp_opts, "adaptive_levenberg_marquardt_mu_min", &adaptive_levenberg_marquardt_mu_min);
+
+    double adaptive_levenberg_marquardt_mu0 = {{ solver_options.adaptive_levenberg_marquardt_mu0 }};
+    ocp_nlp_solver_opts_set(nlp_config, nlp_opts, "adaptive_levenberg_marquardt_mu0", &adaptive_levenberg_marquardt_mu0);
+
+{%- endif %}
+
 }
 
 
@@ -2866,6 +2893,26 @@ int {{ model.name }}_acados_solve({{ model.name }}_solver_capsule* capsule)
 }
 
 
+void {{ model.name }}_acados_batch_solve({{ model.name }}_solver_capsule ** capsules, int N_batch)
+{
+{% if solver_options.num_threads_in_batch_solve > 1 %}
+    int num_threads_bkp = omp_get_num_threads();
+    omp_set_num_threads({{ solver_options.num_threads_in_batch_solve }});
+
+    #pragma omp parallel for
+{%- endif %}
+    for (int i = 0; i < N_batch; i++)
+    {
+        ocp_nlp_solve(capsules[i]->nlp_solver, capsules[i]->nlp_in, capsules[i]->nlp_out);
+    }
+
+{% if solver_options.num_threads_in_batch_solve > 1 %}
+    omp_set_num_threads( num_threads_bkp );
+{%- endif %}
+    return;
+}
+
+
 int {{ model.name }}_acados_free({{ model.name }}_solver_capsule* capsule)
 {
     // before destroying, keep some info
@@ -3106,8 +3153,8 @@ int {{ model.name }}_acados_free({{ model.name }}_solver_capsule* capsule)
 
 void {{ model.name }}_acados_print_stats({{ model.name }}_solver_capsule* capsule)
 {
-    int sqp_iter, stat_m, stat_n, tmp_int;
-    ocp_nlp_get(capsule->nlp_config, capsule->nlp_solver, "sqp_iter", &sqp_iter);
+    int nlp_iter, stat_m, stat_n, tmp_int;
+    ocp_nlp_get(capsule->nlp_config, capsule->nlp_solver, "nlp_iter", &nlp_iter);
     ocp_nlp_get(capsule->nlp_config, capsule->nlp_solver, "stat_n", &stat_n);
     ocp_nlp_get(capsule->nlp_config, capsule->nlp_solver, "stat_m", &stat_m);
 
@@ -3115,15 +3162,13 @@ void {{ model.name }}_acados_print_stats({{ model.name }}_solver_capsule* capsul
     double stat[{{ solver_options.nlp_solver_max_iter * stat_n_max }}];
     ocp_nlp_get(capsule->nlp_config, capsule->nlp_solver, "statistics", stat);
 
-    int nrow = sqp_iter+1 < stat_m ? sqp_iter+1 : stat_m;
+    int nrow = nlp_iter+1 < stat_m ? nlp_iter+1 : stat_m;
 
+{% if solver_options.nlp_solver_type == "SQP" %}
     printf("iter\tres_stat\tres_eq\t\tres_ineq\tres_comp\tqp_stat\tqp_iter\talpha");
     if (stat_n > 8)
         printf("\t\tqp_res_stat\tqp_res_eq\tqp_res_ineq\tqp_res_comp");
     printf("\n");
-
-{%- if solver_options.nlp_solver_type == "SQP" %}
-
     for (int i = 0; i < nrow; i++)
     {
         for (int j = 0; j < stat_n + 1; j++)
@@ -3140,7 +3185,9 @@ void {{ model.name }}_acados_print_stats({{ model.name }}_solver_capsule* capsul
         }
         printf("\n");
     }
-{% else %}
+{%- elif solver_options.nlp_solver_type == "DDP" %}
+    printf("{{ model.name }}_acados_print_stats: not implemented for DDP\n");
+{%- elif solver_options.nlp_solver_type == "SQP_RTI" %}
     printf("iter\tqp_stat\tqp_iter\n");
     for (int i = 0; i < nrow; i++)
     {
