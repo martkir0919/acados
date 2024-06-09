@@ -48,6 +48,8 @@ function ocp_json = set_up_acados_ocp_nlp_json(obj, simulink_opts)
     end
 
     ocp_json.model.name = model.name;
+    ocp_json.name = model.name;
+
     % modules
     ocp_json.solver_options.qp_solver = upper(obj.opts_struct.qp_solver);
     ocp_json.solver_options.integrator_type = upper(obj.opts_struct.sim_method);
@@ -132,6 +134,7 @@ function ocp_json = set_up_acados_ocp_nlp_json(obj, simulink_opts)
     ocp_json.solver_options.exact_hess_dyn = obj.opts_struct.exact_hess_dyn;
     ocp_json.solver_options.exact_hess_cost = obj.opts_struct.exact_hess_cost;
     ocp_json.solver_options.exact_hess_constr = obj.opts_struct.exact_hess_constr;
+    ocp_json.solver_options.fixed_hess = obj.opts_struct.fixed_hess;
 
     ocp_json.solver_options.ext_fun_compile_flags = obj.opts_struct.ext_fun_compile_flags;
 
@@ -144,7 +147,7 @@ function ocp_json = set_up_acados_ocp_nlp_json(obj, simulink_opts)
     ocp_json.dims.nu = model.dim_nu;
     ocp_json.dims.nz = model.dim_nz;
     ocp_json.dims.np = model.dim_np;
-    
+
     if strcmp(model.cost_type, 'ext_cost')
         ocp_json.dims.ny = 0;
     else
@@ -155,11 +158,15 @@ function ocp_json = set_up_acados_ocp_nlp_json(obj, simulink_opts)
     ocp_json.dims.nbu = model.dim_nbu;
     ocp_json.dims.ng = model.dim_ng;
     ocp_json.dims.nh = model.dim_nh;
+    ocp_json.dims.nh_0 = model.dim_nh_0;
     ocp_json.dims.nbxe_0 = model.dim_nbxe_0;
     ocp_json.dims.ns = model.dim_ns;
     ocp_json.dims.nsbx = model.dim_nsbx;
     ocp_json.dims.nsbu = model.dim_nsbu;
     ocp_json.dims.nsg = model.dim_nsg;
+    ocp_json.dims.ns_0 = model.dim_ns_0;
+    ocp_json.dims.nsh_0 = model.dim_nsh_0;
+    ocp_json.dims.nsphi_0 = model.dim_nsphi_0;
 
     if isfield(model, 'dim_ny_0')
         ocp_json.dims.ny_0 = model.dim_ny_0;
@@ -212,7 +219,7 @@ function ocp_json = set_up_acados_ocp_nlp_json(obj, simulink_opts)
     else
         ocp_json.cost.cost_type_e = upper(model.cost_type_e);
     end
-    
+
     ocp_json.cost.cost_ext_fun_type = model.cost_ext_fun_type;
     if strcmp(model.cost_ext_fun_type, 'generic')
         ocp_json.cost.cost_source_ext_cost = model.cost_source_ext_cost;
@@ -228,8 +235,9 @@ function ocp_json = set_up_acados_ocp_nlp_json(obj, simulink_opts)
         ocp_json.cost.cost_source_ext_cost_e = model.cost_source_ext_cost_e;
         ocp_json.cost.cost_function_ext_cost_e = model.cost_function_ext_cost_e;
     end
-    
+
     ocp_json.constraints.constr_type = upper(model.constr_type);
+    ocp_json.constraints.constr_type_0 = upper(model.constr_type_0);
     ocp_json.constraints.constr_type_e = upper(model.constr_type_e);
 
     % parameters
@@ -359,9 +367,14 @@ function ocp_json = set_up_acados_ocp_nlp_json(obj, simulink_opts)
         ocp_json.constraints.ug_e = model.constr_ug_e;
     end
 
-    if ocp_json.dims.nh_e > 0    
+    if ocp_json.dims.nh_e > 0
         ocp_json.constraints.lh_e = model.constr_lh_e;
         ocp_json.constraints.uh_e = model.constr_uh_e;
+    end
+
+    if ocp_json.dims.nh_0 > 0
+        ocp_json.constraints.lh_0 = model.constr_lh_0;
+        ocp_json.constraints.uh_0 = model.constr_uh_0;
     end
 
     if ocp_json.dims.nsbx_e > 0
@@ -407,6 +420,22 @@ function ocp_json = set_up_acados_ocp_nlp_json(obj, simulink_opts)
         end
     end
 
+
+    if ocp_json.dims.nsh_0 > 0
+        ocp_json.constraints.idxsh_0 = J_to_idx_slack(model.constr_Jsh_0);
+        if isfield(model, 'constr_lsh_0')
+            ocp_json.constraints.lsh_0 = model.constr_lsh_0;
+        else
+            ocp_json.constraints.lsh_0 = zeros(ocp_json.dims.nsh_0, 1);
+        end
+        if isfield(model, 'constr_ush_0')
+            ocp_json.constraints.ush_0 = model.constr_ush_0;
+        else
+            ocp_json.constraints.ush_0 = zeros(ocp_json.dims.nsh_0, 1);
+        end
+    end
+
+
     %% Cost
     if strcmp(model.cost_type, 'linear_ls')
         ocp_json.cost.Vu = model.cost_Vu;
@@ -435,6 +464,7 @@ function ocp_json = set_up_acados_ocp_nlp_json(obj, simulink_opts)
     end
     if strcmp(model.cost_type_0, 'nonlinear_ls') || strcmp(model.cost_type_0, 'linear_ls')
         ocp_json.cost.W_0 = model.cost_W_0;
+
         if isfield(model, 'cost_y_ref_0')
             ocp_json.cost.yref_0 = model.cost_y_ref_0;
         else
@@ -450,6 +480,7 @@ function ocp_json = set_up_acados_ocp_nlp_json(obj, simulink_opts)
     if strcmp(model.cost_type_e, 'nonlinear_ls') || strcmp(model.cost_type_e, 'linear_ls')
         if isfield(model, 'cost_W_e')
             ocp_json.cost.W_e = model.cost_W_e;
+
         end
         if isfield(model, 'cost_y_ref_e')
             ocp_json.cost.yref_e = model.cost_y_ref_e;
@@ -470,6 +501,19 @@ function ocp_json = set_up_acados_ocp_nlp_json(obj, simulink_opts)
     end
     if isfield(model, 'cost_zu')
         ocp_json.cost.zu = model.cost_zu;
+    end
+
+    if isfield(model, 'cost_Zl_0')
+        ocp_json.cost.Zl_0 = diag(model.cost_Zl_0);
+    end
+    if isfield(model, 'cost_Zu_0')
+        ocp_json.cost.Zu_0 = diag(model.cost_Zu_0);
+    end
+    if isfield(model, 'cost_zl_0')
+        ocp_json.cost.zl_0 = model.cost_zl_0;
+    end
+    if isfield(model, 'cost_zu_0')
+        ocp_json.cost.zu_0 = model.cost_zu_0;
     end
 
 

@@ -45,7 +45,7 @@ num_steps = 4;
 Ts = 0.1;
 
 %% model
-model = linear_mass_spring_model;
+model = linear_mass_spring_model();
 
 model_name = ['lin_mass_' method];
 nx = model.nx;
@@ -67,10 +67,10 @@ end
 
 if (strcmp(method, 'erk'))
     sim_model.set('dyn_type', 'explicit');
-    sim_model.set('dyn_expr_f', model.expr_f_expl);
+    sim_model.set('dyn_expr_f', model.dyn_expr_f_expl);
 else % irk irk_gnsf
     sim_model.set('dyn_type', 'implicit');
-    sim_model.set('dyn_expr_f', model.expr_f_impl);
+    sim_model.set('dyn_expr_f', model.dyn_expr_f_impl);
     sim_model.set('sym_xdot', model.sym_xdot);
 end
 

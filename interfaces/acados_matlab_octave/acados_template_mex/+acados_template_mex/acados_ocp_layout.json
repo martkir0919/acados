@@ -67,6 +67,9 @@
         "constr_type": [
             "str"
         ],
+        "constr_type_0": [
+            "str"
+        ],
         "constr_type_e": [
             "str"
         ],
@@ -203,6 +206,18 @@
             "ndarray",
             [
                 "nh"
+            ]
+        ],
+        "lh_0": [
+            "ndarray",
+            [
+                "nh_0"
+            ]
+        ],
+        "uh_0": [
+            "ndarray",
+            [
+                "nh_0"
             ]
         ],
         "lh_e": [
@@ -349,6 +364,12 @@
                 "nsh"
             ]
         ],
+        "idxsh_0": [
+            "ndarray",
+            [
+                "nsh_0"
+            ]
+        ],
         "lsh_e": [
             "ndarray",
             [
@@ -401,6 +422,24 @@
             "ndarray",
             [
                 "nsphi_e"
+            ]
+        ],
+        "lsphi_0": [
+            "ndarray",
+            [
+                "nsphi_0"
+            ]
+        ],
+        "usphi_0": [
+            "ndarray",
+            [
+                "nsphi_0"
+            ]
+        ],
+        "idxsphi_0": [
+            "ndarray",
+            [
+                "nsphi_0"
             ]
         ]
     },
@@ -486,6 +525,13 @@
                 "ny"
             ]
         ],
+        "W_e": [
+            "ndarray",
+            [
+                "ny_e",
+                "ny_e"
+            ]
+        ],
         "Zl": [
             "ndarray",
             [
@@ -508,13 +554,6 @@
             "ndarray",
             [
                 "ns"
-            ]
-        ],
-        "W_e": [
-            "ndarray",
-            [
-                "ny_e",
-                "ny_e"
             ]
         ],
         "yref_0": [
@@ -558,6 +597,30 @@
             [
                 "ns_e"
             ]
+        ],
+        "Zl_0": [
+            "ndarray",
+            [
+                "ns_0"
+            ]
+        ],
+        "Zu_0": [
+            "ndarray",
+            [
+                "ns_0"
+            ]
+        ],
+        "zl_0": [
+            "ndarray",
+            [
+                "ns_0"
+            ]
+        ],
+        "zu_0": [
+            "ndarray",
+            [
+                "ns_0"
+            ]
         ]
     },
     "dims": {
@@ -598,6 +661,9 @@
             "int"
         ],
         "nsh_e": [
+            "int"
+        ],
+        "nsh_0": [
             "int"
         ],
         "nsphi": [

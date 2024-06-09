@@ -203,6 +203,20 @@ function [model, opts] = detect_dims_ocp(model, opts)
     end
     model.dim_nh = nh;
 
+    if isfield(model, 'constr_expr_h_0') && ...
+            isfield(model, 'constr_lh_0') && isfield(model, 'constr_uh_0')
+    nh_0 = length(model.constr_lh_0);
+    if nh_0 ~= length(model.constr_uh_0) || nh_0 ~= length(model.constr_expr_h_0)
+        error('inconsistent dimension nh_0, regarding expr_h_0, lh_0, uh_0.');
+    end
+    elseif isfield(model, 'constr_expr_h_0') || ...
+        isfield(model, 'constr_lh_0') || isfield(model, 'constr_uh_0')
+    error('setting external constraint function h: need expr_h_0, lh_0, uh_0 at least one missing.');
+    else
+        nh_0 = 0;
+    end
+    model.dim_nh_0 = nh_0;
+
     % terminal
     if isfield(model, 'constr_Jbx_e') && isfield(model, 'constr_lbx_e') && isfield(model, 'constr_ubx_e')
         nbx_e = length(model.constr_lbx_e);
@@ -303,6 +317,43 @@ function [model, opts] = detect_dims_ocp(model, opts)
     model.dim_nsh = nsh;
     model.dim_nsphi = nsphi;
 
+    % slacks at initial stage
+    if isfield(model, 'constr_Jsh_0')
+        nsh_0 = size(model.constr_Jsh_0, 2);
+    else
+        nsh_0 = 0;
+    end
+    if isfield(model, 'constr_Jsphi_0')
+        nsphi_0 = size(model.constr_Jsphi_0, 2);
+    else
+        nsphi_0 = 0;
+    end
+
+    ns_0 = nsbu + nsg + nsh_0 + nsphi_0;
+    wrong_field = '';
+    if isfield(model, 'cost_Zl_0') && ~all(size(model.cost_Zl_0) == [ns_0, ns_0])
+        wrong_field = 'Zl_0';
+        dim = size(model.cost_Zl_0);
+    elseif isfield(model, 'cost_Zu_0') && ~all(size(model.cost_Zu_0) == [ns_0, ns_0])
+        wrong_field = 'Zu_0';
+        dim = size(model.cost_Zu_0);
+    elseif isfield(model, 'cost_zl_0') && ~all(size(model.cost_zl_0) == [ns_0, 1])
+        wrong_field = 'zl_0';
+        dim = size(model.cost_zl_0);
+    elseif isfield(model, 'cost_zu_0') && ~all(size(model.cost_zu_0) == [ns_0, 1])
+        wrong_field = 'zu_0';
+        dim = size(model.cost_zu_0);
+    end
+
+    if ~strcmp(wrong_field, '')
+        error(['Inconsistent size for field', wrong_field, ' with dimension ', num2str(dim),...
+                '. Detected ns_0 = ', num2str(ns_0), ' = nsbu + nsg + nsh_0 + nsphi_0.',...
+                ' With nsg = ', num2str(nsg), ' nsh_0 = ', num2str(nsh_0), ', nsphi_0 = ', num2str(nsphi_0), '.'])
+    end
+    model.dim_ns_0 = ns_0;
+    model.dim_nsh_0 = nsh_0;
+    model.dim_nsphi_0 = nsphi_0;
+
     %% terminal slack dimensions
     if isfield(model, 'constr_Jsbx_e')
         nsbx_e = size(model.constr_Jsbx_e, 2);
@@ -392,7 +443,7 @@ function [model, opts] = detect_dims_ocp(model, opts)
     end
     if ~isempty(opts.sim_method_num_stages)
         if(strcmp(opts.sim_method, "erk"))
-            if (any(opts.sim_method_num_stages < 1) || all(opts.sim_method_num_stages > 4))
+            if (any(opts.sim_method_num_stages < 1) || any(opts.sim_method_num_stages > 4))
                 error(['ERK: num_stages = ', num2str(opts.sim_method_num_stages) ' not available. Only number of stages = {1,2,3,4} implemented!']);
             end
         end

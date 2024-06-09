@@ -148,6 +148,10 @@ def export_rsm_model():
         model.con_r_expr = vertcat(u_d, u_q)
         model.con_r_in_phi = r
 
+        model.con_phi_expr_0 = model.con_phi_expr
+        model.con_r_expr_0 = model.con_r_expr
+        model.con_r_in_phi_0 = model.con_r_in_phi
+
     return model
 
 
@@ -167,9 +171,9 @@ def create_ocp_solver(tol = 1e-3):
     model = export_rsm_model()
     ocp.model = model
 
-    nx = model.x.size()[0]
-    nu = model.u.size()[0]
-    nz = model.z.size()[0]
+    nx = model.x.rows()
+    nu = model.u.rows()
+    nz = model.z.rows()
     ny = nu + nx
     ny_e = nx
     Tf = N*Ts
@@ -229,9 +233,10 @@ def create_ocp_solver(tol = 1e-3):
     if WITH_ELLIPSOIDAL_CONSTRAINT:
         # to avoid LICQ violations
         eps = 1e-3 # Note: was originally eps = 0.0.
-        ocp.constraints.constr_type = 'BGP'
         ocp.constraints.lphi = np.array([-1.0e8])
         ocp.constraints.uphi = (1-eps)*np.array([(u_max*sqrt(3)/2)**2])
+        ocp.constraints.lphi_0 = ocp.constraints.lphi
+        ocp.constraints.uphi_0 = ocp.constraints.uphi
 
     if WITH_HEXAGON_CONSTRAINT:
         # lg <= C*x + D*u <= ug
@@ -263,7 +268,7 @@ def create_ocp_solver(tol = 1e-3):
     else:
         ocp.solver_options.nlp_solver_type = 'SQP'
 
-    acados_solver = AcadosOcpSolver(ocp, verbose=False)
+    acados_solver = AcadosOcpSolver(ocp, verbose=True)
 
     return acados_solver
 
@@ -300,9 +305,9 @@ def main():
     if USE_PLANT:
         plant = setup_acados_integrator(acados_solver.acados_ocp)
 
-    simX = np.ndarray((Nsim, nx))
-    simU = np.ndarray((Nsim, nu))
-    simY = np.ndarray((Nsim, nu+nx))
+    simX = np.zeros((Nsim, nx))
+    simU = np.zeros((Nsim, nu))
+    simY = np.zeros((Nsim, nu+nx))
     times_prep = np.zeros(Nsim)
     times_feed = np.zeros(Nsim)
 

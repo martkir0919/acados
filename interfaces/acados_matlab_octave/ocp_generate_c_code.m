@@ -79,6 +79,7 @@ function ocp_generate_c_code(obj)
     end
     % constraints
     if ((strcmp(obj.model_struct.constr_type, 'bgh') && obj.model_struct.dim_nh > 0) || ...
+        (strcmp(obj.model_struct.constr_type_0, 'bgh') && obj.model_struct.dim_nh_0 > 0) || ...
         (strcmp(obj.model_struct.constr_type_e, 'bgh') && obj.model_struct.dim_nh_e > 0))
         generate_c_code_nonlinear_constr( obj.model_struct, obj.opts_struct,...
               fullfile(pwd, 'c_generated_code', [obj.model_struct.name '_constraints']) );
@@ -147,7 +148,8 @@ function ocp_generate_c_code(obj)
     %% load JSON layout
     acados_folder = getenv('ACADOS_INSTALL_DIR');
     json_layout_filename = fullfile(acados_folder, 'interfaces',...
-                                   'acados_template','acados_template','acados_layout.json');
+                                   'acados_matlab_octave', ...
+                                   'acados_template_mex', '+acados_template_mex','acados_ocp_layout.json');
     % if is_octave()
     addpath(fullfile(acados_folder, 'external', 'jsonlab'))
     acados_layout = loadjson(fileread(json_layout_filename));
@@ -205,6 +207,8 @@ function ocp_generate_c_code(obj)
             if this_dims(1) == 1 && length(property_dim_names) ~= 1 % matrix with 1 row
                 cost.(fields{i}) = {cost.(fields{i})};
             end
+        elseif strcmp(cost_layout.(fields{i}){1}, 'int')
+            cost.(fields{i}) = cost.(fields{i}){1};
         end
     end
     obj.acados_ocp_nlp_json.cost = cost;
@@ -247,15 +251,15 @@ function ocp_generate_c_code(obj)
     % if is_octave()
         % savejson does not work for classes!
         % -> consider making the acados_ocp_nlp_json properties structs directly.
-        ocp_json_struct = obj.acados_ocp_nlp_json.struct();
-        ocp_json_struct.dims = ocp_json_struct.dims.struct();
-        ocp_json_struct.cost = ocp_json_struct.cost.struct();
-        ocp_json_struct.constraints = ocp_json_struct.constraints.struct();
-        ocp_json_struct.solver_options = ocp_json_struct.solver_options.struct();
+        ocp_json_struct = orderfields(obj.acados_ocp_nlp_json.struct());
+        ocp_json_struct.dims = orderfields(ocp_json_struct.dims.struct());
+        ocp_json_struct.cost = orderfields(ocp_json_struct.cost.struct());
+        ocp_json_struct.constraints = orderfields(ocp_json_struct.constraints.struct());
+        ocp_json_struct.solver_options = orderfields(ocp_json_struct.solver_options.struct());
 
         % add compilation information to json
         libs = loadjson(fileread(fullfile(acados_folder, 'lib', 'link_libs.json')));
-        ocp_json_struct.acados_link_libs = libs;
+        ocp_json_struct.acados_link_libs = orderfields(libs);
         if ismac
             ocp_json_struct.os = 'mac';
         elseif isunix

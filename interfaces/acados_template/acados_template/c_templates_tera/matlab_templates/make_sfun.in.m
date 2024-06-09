@@ -101,6 +101,11 @@ SOURCES = { ...
         {%- elif constraints.constr_type == "BGP" and dims.nphi > 0 %}
             '{{ model.name }}_constraints/{{ model.name }}_phi_constraint.c', ...
         {%- endif %}
+        {%- if constraints.constr_type_0 == "BGH"  and dims.nh_0 > 0 %}
+        '{{ model.name }}_constraints/{{ model.name }}_constr_h_0_fun.c', ...
+            '{{ model.name }}_constraints/{{ model.name }}_constr_h_0_fun_jac_uxt_zt_hess.c', ...
+            '{{ model.name }}_constraints/{{ model.name }}_constr_h_0_fun_jac_uxt_zt.c', ...
+        {%- endif %}
         {%- if constraints.constr_type_e == "BGH"  and dims.nh_e > 0 %}
             '{{ model.name }}_constraints/{{ model.name }}_constr_h_e_fun.c', ...
             '{{ model.name }}_constraints/{{ model.name }}_constr_h_e_fun_jac_uxt_zt.c', ...
@@ -291,6 +296,17 @@ sfun_input_names = [sfun_input_names; 'uh [{{ dims.N*dims.nh }}]'];
 i_in = i_in + 1;
 {%- endif %}
 
+{%- if dims.nh_0 > 0 and simulink_opts.inputs.lh_0 -%}  {#- lh_0 #}
+input_note = strcat(input_note, num2str(i_in), ') lh_0, size [{{ dims.nh_0 }}]\n ');
+sfun_input_names = [sfun_input_names; 'lh_0 [{{ dims.nh_0 }}]'];
+i_in = i_in + 1;
+{%- endif %}
+{%- if dims.nh_0 > 0 and simulink_opts.inputs.uh_0 -%}  {#- uh_0 #}
+input_note = strcat(input_note, num2str(i_in), ') uh_0, size [{{ dims.nh_0 }}]\n ');
+sfun_input_names = [sfun_input_names; 'uh_0 [{{ dims.nh_0 }}]'];
+i_in = i_in + 1;
+{%- endif %}
+
 {%- if dims.nh_e > 0 and simulink_opts.inputs.lh_e -%}  {#- lh_e #}
 input_note = strcat(input_note, num2str(i_in), ') lh_e, size [{{ dims.nh_e }}]\n ');
 sfun_input_names = [sfun_input_names; 'lh_e [{{ dims.nh_e }}]'];
@@ -364,6 +380,12 @@ sfun_output_names = [sfun_output_names; 'utraj [{{ dims.nu * dims.N }}]'];
 i_out = i_out + 1;
 output_note = strcat(output_note, num2str(i_out), ') xtraj, state concatenated for nodes 0 to N, size [{{ dims.nx * (dims.N + 1) }}]\n ');
 sfun_output_names = [sfun_output_names; 'xtraj [{{ dims.nx * (dims.N + 1) }}]'];
+{%- endif %}
+
+{%- if simulink_opts.outputs.ztraj == 1 %}
+i_out = i_out + 1;
+output_note = strcat(output_note, num2str(i_out), ') ztraj, algebraic states concatenated for nodes 0 to N-1, size [{{ dims.nz * dims.N }}]\n ');
+sfun_output_names = [sfun_output_names; 'ztraj [{{ dims.nz * dims.N }}]'];
 {%- endif %}
 
 {%- if simulink_opts.outputs.solver_status == 1 %}

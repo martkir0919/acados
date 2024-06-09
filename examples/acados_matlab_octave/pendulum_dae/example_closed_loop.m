@@ -30,7 +30,7 @@
 %
 
 %% test of native matlab interface
-clear all
+clear all; clc;
 
 % check that env.sh has been run
 env_run = getenv('ENV_RUN');
@@ -71,7 +71,7 @@ ocp_sim_method_newton_iter = 3 * ones(ocp_N, 1); % scalar or vector of size ocp_
 cost_type = 'linear_ls'; % linear_ls, ext_cost
 
 %% model
-model = pendulum_dae_model;
+model = pendulum_dae_model();
 %  sym_x = [xpos, ypos, alpha, vx, vy, valpha]
 length_pendulum = 5;
 xsteady = [ 0; -length_pendulum; 0; 0; 0; 0];
@@ -130,9 +130,12 @@ ocp_model.set('T', T);
 constraint_h = 1;
 if constraint_h
     nh = length(model.expr_h);
+    ocp_model.set('constr_expr_h_0', model.expr_h);
     ocp_model.set('constr_expr_h', model.expr_h);
     lh =    0;
     uh =  200;
+    ocp_model.set('constr_lh_0', lh);
+	ocp_model.set('constr_uh_0', uh);
     ocp_model.set('constr_lh', lh);
 	ocp_model.set('constr_uh', uh);
 else
@@ -162,6 +165,7 @@ if (strcmp(cost_type, 'linear_ls'))
 	ocp_model.set('cost_W_e', W_e);
 	ocp_model.set('cost_y_ref', yr);
 	ocp_model.set('cost_y_ref_e', yr_e);
+    ocp_model.set('cost_Vz', zeros(ny,nz));
 elseif (strcmp(cost_type, 'ext_cost'))
 	ocp_model.set('cost_expr_ext_cost', model.expr_ext_cost);
 	ocp_model.set('cost_expr_ext_cost_e', model.expr_ext_cost_e);

@@ -55,8 +55,8 @@ ocp.solver_options.model_external_shared_lib_dir = os.getcwd()+"/test_external_l
 ocp.solver_options.model_external_shared_lib_name = "external_ode_casadi"
 
 Tf = 1.0
-nx = model.x.size()[0]
-nu = model.u.size()[0]
+nx = model.x.rows()
+nu = model.u.rows()
 ny = nx + nu
 ny_e = nx
 N = 30
@@ -89,7 +89,6 @@ ocp.cost.yref_e = np.zeros((ny_e, ))
 Fmax = 10
 ocp.constraints.x0 = x0
 ocp.dims.nbx_0 = nx
-ocp.constraints.constr_type = 'BGH'
 # ocp.constraints.lbu = np.array([-Fmax])
 # ocp.constraints.ubu = np.array([+Fmax])
 # ocp.constraints.idxbu = np.array([0])
@@ -128,8 +127,8 @@ if status != 0:
 stat_fields = ['time_tot', 'time_lin', 'time_qp', 'time_qp_solver_call', 'time_reg', 'sqp_iter']
 for field in stat_fields:
     print(f"{field} : {ocp_solver.get_stats(field)}")
-simX = np.ndarray((N + 1, nx))
-simU = np.ndarray((N, nu))
+simX = np.zeros((N + 1, nx))
+simU = np.zeros((N, nu))
 for i in range(N):
     simX[i,:] = ocp_solver.get(i, "x")
     simU[i,:] = ocp_solver.get(i, "u")

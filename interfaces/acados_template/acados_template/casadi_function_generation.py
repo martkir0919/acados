@@ -32,7 +32,7 @@ import os
 import casadi as ca
 from .utils import is_empty, casadi_length
 from .acados_model import AcadosModel
-from .acados_ocp import AcadosOcp
+from .acados_ocp_constraints import AcadosOcpConstraints
 
 
 def get_casadi_symbol(x):
@@ -43,12 +43,12 @@ def get_casadi_symbol(x):
     else:
         raise TypeError("Expected casadi SX or MX.")
 
+
 ################
 # Dynamics
 ################
 
-
-def generate_c_code_discrete_dynamics( model, opts ):
+def generate_c_code_discrete_dynamics(model: AcadosModel, opts):
 
     casadi_codegen_opts = dict(mex=False, casadi_int='int', casadi_real='double')
 
@@ -61,8 +61,12 @@ def generate_c_code_discrete_dynamics( model, opts ):
     nx = casadi_length(x)
 
     symbol = get_casadi_symbol(x)
-    # assume nx1 = nx !!!
-    lam = symbol('lam', nx, 1)
+    nx1 = casadi_length(phi)
+
+    if nx != nx1:
+        print('Warning: generate_c_code_discrete_dynamics: got nx != nx1, this only works for a single shooting interval.')
+
+    lam = symbol('lam', nx1, 1)
 
     # generate jacobians
     ux = ca.vertcat(u,x)
@@ -90,12 +94,27 @@ def generate_c_code_discrete_dynamics( model, opts ):
     phi_fun_jac_ut_xt_hess = ca.Function(fun_name, [x, u, lam, p], [phi, jac_ux.T, hess_ux])
     phi_fun_jac_ut_xt_hess.generate(fun_name, casadi_codegen_opts)
 
+    if opts["with_solution_sens_wrt_params"]:
+        # generate jacobian of lagrange gradient wrt p
+        jac_p = ca.jacobian(phi, p)
+        # hess_xu_p_old = ca.jacobian((lam.T @ jac_ux).T, p)
+        hess_xu_p = ca.jacobian(adj_ux, p) # using adjoint
+        fun_name = model_name + '_dyn_disc_phi_jac_p_hess_xu_p'
+        phi_jac_p_hess_xu_p = ca.Function(fun_name, [x, u, lam, p], [jac_p, hess_xu_p])
+        phi_jac_p_hess_xu_p.generate(fun_name, casadi_codegen_opts)
+
+    if opts["with_value_sens_wrt_params"]:
+        adj_p = ca.jtimes(phi, p, lam, True)
+        fun_name = model_name + '_dyn_disc_phi_adj_p'
+        phi_adj_p = ca.Function(fun_name, [x, u, lam, p], [adj_p])
+        phi_adj_p.generate(fun_name, casadi_codegen_opts)
+
     os.chdir(cwd)
     return
 
 
 
-def generate_c_code_explicit_ode( model, opts ):
+def generate_c_code_explicit_ode(model: AcadosModel, opts):
 
     casadi_codegen_opts = dict(mex=False, casadi_int='int', casadi_real='double')
 
@@ -170,7 +189,7 @@ def generate_c_code_explicit_ode( model, opts ):
     return
 
 
-def generate_c_code_implicit_ode( model, opts ):
+def generate_c_code_implicit_ode(model: AcadosModel, opts):
 
     casadi_codegen_opts = dict(mex=False, casadi_int='int', casadi_real='double')
 
@@ -249,7 +268,7 @@ def generate_c_code_implicit_ode( model, opts ):
     return
 
 
-def generate_c_code_gnsf( model, opts ):
+def generate_c_code_gnsf(model: AcadosModel, opts):
 
     casadi_codegen_opts = dict(mex=False, casadi_int='int', casadi_real='double')
 
@@ -269,7 +288,6 @@ def generate_c_code_gnsf( model, opts ):
     gnsf_nz1 = size_gnsf_A[0] - size_gnsf_A[1]
     gnsf_nuhat = max(phi_fun.size_in(1))
     gnsf_ny = max(phi_fun.size_in(0))
-    gnsf_nout = max(phi_fun.size_out(0))
 
     # set up expressions
     # if the model uses ca.MX because of cost/constraints
@@ -334,11 +352,9 @@ def generate_c_code_gnsf( model, opts ):
 # Cost
 ################
 
-def generate_c_code_external_cost(ocp: AcadosOcp, stage_type, opts):
-
+def generate_c_code_external_cost(model: AcadosModel, stage_type, opts):
     casadi_codegen_opts = dict(mex=False, casadi_int='int', casadi_real='double')
 
-    model = ocp.model
     x = model.x
     p = model.p
     u = model.u
@@ -349,6 +365,8 @@ def generate_c_code_external_cost(ocp: AcadosOcp, stage_type, opts):
         suffix_name = "_cost_ext_cost_e_fun"
         suffix_name_hess = "_cost_ext_cost_e_fun_jac_hess"
         suffix_name_jac = "_cost_ext_cost_e_fun_jac"
+        suffix_name_param_sens = "_cost_ext_cost_e_hess_xu_p"
+        suffix_name_value_sens = "_cost_ext_cost_e_grad_p"
         ext_cost = model.cost_expr_ext_cost_e
         custom_hess = model.cost_expr_ext_cost_custom_hess_e
         # Last stage cannot depend on u and z
@@ -359,6 +377,8 @@ def generate_c_code_external_cost(ocp: AcadosOcp, stage_type, opts):
         suffix_name = "_cost_ext_cost_fun"
         suffix_name_hess = "_cost_ext_cost_fun_jac_hess"
         suffix_name_jac = "_cost_ext_cost_fun_jac"
+        suffix_name_param_sens = "_cost_ext_cost_hess_xu_p"
+        suffix_name_value_sens = "_cost_ext_cost_grad_p"
         ext_cost = model.cost_expr_ext_cost
         custom_hess = model.cost_expr_ext_cost_custom_hess
 
@@ -366,6 +386,8 @@ def generate_c_code_external_cost(ocp: AcadosOcp, stage_type, opts):
         suffix_name = "_cost_ext_cost_0_fun"
         suffix_name_hess = "_cost_ext_cost_0_fun_jac_hess"
         suffix_name_jac = "_cost_ext_cost_0_fun_jac"
+        suffix_name_param_sens = "_cost_ext_cost_0_hess_xu_p"
+        suffix_name_value_sens = "_cost_ext_cost_0_grad_p"
         ext_cost = model.cost_expr_ext_cost_0
         custom_hess = model.cost_expr_ext_cost_custom_hess_0
 
@@ -375,6 +397,8 @@ def generate_c_code_external_cost(ocp: AcadosOcp, stage_type, opts):
     fun_name = model.name + suffix_name
     fun_name_hess = model.name + suffix_name_hess
     fun_name_jac = model.name + suffix_name_jac
+    fun_name_param = model.name + suffix_name_param_sens
+    fun_name_value_sens = model.name + suffix_name_value_sens
 
     # generate expression for full gradient and Hessian
     hess_uxz, grad_uxz = ca.hessian(ext_cost, ca.vertcat(u, x, z))
@@ -406,13 +430,21 @@ def generate_c_code_external_cost(ocp: AcadosOcp, stage_type, opts):
     ext_cost_fun_jac_hess.generate(fun_name_hess, casadi_codegen_opts)
     ext_cost_fun_jac.generate(fun_name_jac, casadi_codegen_opts)
 
+    if opts["with_solution_sens_wrt_params"]:
+        hess_xu_p = ca.jacobian(grad_uxz, p)
+        ext_cost_hess_xu_p = ca.Function(fun_name_param, [x, u, z, p], [hess_xu_p])
+        ext_cost_hess_xu_p.generate(fun_name_param, casadi_codegen_opts)
+
+    if opts["with_value_sens_wrt_params"]:
+        grad_p = ca.jacobian(ext_cost, p)
+        ext_cost_grad_p = ca.Function(fun_name_value_sens, [x, u, z, p], [grad_p])
+        ext_cost_grad_p.generate(fun_name_value_sens, casadi_codegen_opts)
+
     os.chdir(cwd)
     return
 
 
-def generate_c_code_nls_cost(ocp: AcadosOcp, stage_type ):
-
-    model = ocp.model
+def generate_c_code_nls_cost(model: AcadosModel, stage_type, opts):
     casadi_codegen_opts = dict(mex=False, casadi_int='int', casadi_real='double')
 
     x = model.x
@@ -426,7 +458,6 @@ def generate_c_code_nls_cost(ocp: AcadosOcp, stage_type ):
     if stage_type == 'terminal':
         middle_name = '_cost_y_e'
         u = symbol('u', 0, 0)
-        t = symbol('t', 0, 0)
         y_expr = model.cost_y_expr_e
 
     elif stage_type == 'initial':
@@ -437,16 +468,9 @@ def generate_c_code_nls_cost(ocp: AcadosOcp, stage_type ):
         middle_name = '_cost_y'
         y_expr = model.cost_y_expr
 
-    # checks on time dependency
-    if any(ca.which_depends(y_expr, model.t)):
-        if ocp.solver_options.cost_discretization == "EULER":
-            raise Exception("NLS y_expr depends on time t. This is only supported with cost_discretization=='INTEGRATOR'")
-        if stage_type == 'terminal':
-            raise Exception("NLS cost_y_expr_e depends on time t. Time dependency is not supported on terminal shooting node.")
-
     # change directory
     cwd = os.getcwd()
-    cost_dir = os.path.abspath(os.path.join(ocp.code_export_directory, f'{model.name}_cost'))
+    cost_dir = os.path.abspath(os.path.join(opts["code_export_directory"], f'{model.name}_cost'))
     if not os.path.exists(cost_dir):
         os.makedirs(cost_dir)
     os.chdir(cost_dir)
@@ -483,9 +507,8 @@ def generate_c_code_nls_cost(ocp: AcadosOcp, stage_type ):
 
 
 
-def generate_c_code_conl_cost(ocp: AcadosOcp, stage_type: str):
+def generate_c_code_conl_cost(model: AcadosModel, stage_type: str, opts):
 
-    model = ocp.model
     casadi_codegen_opts = dict(mex=False, casadi_int='int', casadi_real='double')
 
     x = model.x
@@ -497,7 +520,6 @@ def generate_c_code_conl_cost(ocp: AcadosOcp, stage_type: str):
 
     if stage_type == 'terminal':
         u = symbol('u', 0, 0)
-        t = symbol('t', 0, 0)
 
         yref = model.cost_r_in_psi_expr_e
         inner_expr = model.cost_y_expr_e - yref
@@ -535,13 +557,6 @@ def generate_c_code_conl_cost(ocp: AcadosOcp, stage_type: str):
 
         custom_hess = model.cost_conl_custom_outer_hess
 
-    # checks on time dependency
-    if any(ca.which_depends(inner_expr, model.t)):
-        if ocp.solver_options.cost_discretization == "EULER":
-            raise Exception("CONL inner_expr depends on time t. This is only supported with cost_discretization=='INTEGRATOR'")
-        if stage_type == 'terminal':
-            raise Exception("CONL cost_y_expr depends on time t. Time dependency is not supported on terminal shooting node.")
-
     # set up function names
     fun_name_cost_fun = model.name + suffix_name_fun
     fun_name_cost_fun_jac_hess = model.name + suffix_name_fun_jac_hess
@@ -557,7 +572,11 @@ def generate_c_code_conl_cost(ocp: AcadosOcp, stage_type: str):
     else:
         hess = custom_hess
 
-    outer_hess_fun = ca.Function('inner_hess', [res_expr, t, p], [hess])
+    outer_hess_fun = ca.Function('outer_hess', [res_expr, t, p], [hess])
+    outer_hess_expr = outer_hess_fun(inner_expr, t, p)
+    outer_hess_is_diag = outer_hess_expr.sparsity().is_diag()
+    if casadi_length(res_expr) <= 4:
+        outer_hess_is_diag = 0
 
     Jt_ux_expr = ca.jacobian(inner_expr, ca.vertcat(u, x)).T
     Jt_z_expr = ca.jacobian(inner_expr, z).T
@@ -570,12 +589,12 @@ def generate_c_code_conl_cost(ocp: AcadosOcp, stage_type: str):
     cost_fun_jac_hess = ca.Function(
         fun_name_cost_fun_jac_hess,
         [x, u, z, yref, t, p],
-        [cost_expr, outer_loss_grad_fun(inner_expr, t, p), Jt_ux_expr, Jt_z_expr, outer_hess_fun(inner_expr, t, p)]
+        [cost_expr, outer_loss_grad_fun(inner_expr, t, p), Jt_ux_expr, Jt_z_expr, outer_hess_expr, outer_hess_is_diag]
     )
 
     # change directory
     cwd = os.getcwd()
-    cost_dir = os.path.abspath(os.path.join(ocp.code_export_directory, f'{model.name}_cost'))
+    cost_dir = os.path.abspath(os.path.join(opts["code_export_directory"], f'{model.name}_cost'))
     if not os.path.exists(cost_dir):
         os.makedirs(cost_dir)
     os.chdir(cost_dir)
@@ -592,27 +611,33 @@ def generate_c_code_conl_cost(ocp: AcadosOcp, stage_type: str):
 ################
 # Constraints
 ################
-def generate_c_code_constraint( model, con_name, is_terminal, opts ):
+def generate_c_code_constraint(model: AcadosModel, constraints: AcadosOcpConstraints, stage_type: str, opts: dict):
 
     casadi_codegen_opts = dict(mex=False, casadi_int='int', casadi_real='double')
 
     # load constraint variables and expression
     x = model.x
     p = model.p
+    u = model.u
+    z = model.z
 
     symbol = get_casadi_symbol(x)
 
-    if is_terminal:
+    if stage_type == 'terminal':
+        constr_type = constraints.constr_type_e
         con_h_expr = model.con_h_expr_e
         con_phi_expr = model.con_phi_expr_e
         # create dummy u, z
         u = symbol('u', 0, 0)
         z = symbol('z', 0, 0)
-    else:
+    elif stage_type == 'initial':
+        constr_type = constraints.constr_type_0
+        con_h_expr = model.con_h_expr_0
+        con_phi_expr = model.con_phi_expr_0
+    elif stage_type == 'path':
+        constr_type = constraints.constr_type
         con_h_expr = model.con_h_expr
         con_phi_expr = model.con_phi_expr
-        u = model.u
-        z = model.z
 
     if (not is_empty(con_h_expr)) and (not is_empty(con_phi_expr)):
         raise Exception("acados: you can either have constraint_h, or constraint_phi, not both.")
@@ -620,11 +645,6 @@ def generate_c_code_constraint( model, con_name, is_terminal, opts ):
     if (is_empty(con_h_expr) and is_empty(con_phi_expr)):
         # both empty -> nothing to generate
         return
-
-    if is_empty(con_h_expr):
-        constr_type = 'BGP'
-    else:
-        constr_type = 'BGH'
 
     if is_empty(p):
         p = symbol('p', 0, 0)
@@ -646,10 +666,12 @@ def generate_c_code_constraint( model, con_name, is_terminal, opts ):
 
     # export casadi functions
     if constr_type == 'BGH':
-        if is_terminal:
-            fun_name = con_name + '_constr_h_e_fun_jac_uxt_zt'
+        if stage_type == 'terminal':
+            fun_name = model.name + '_constr_h_e_fun_jac_uxt_zt'
+        elif stage_type == 'initial':
+            fun_name = model.name + '_constr_h_0_fun_jac_uxt_zt'
         else:
-            fun_name = con_name + '_constr_h_fun_jac_uxt_zt'
+            fun_name = model.name + '_constr_h_fun_jac_uxt_zt'
 
         jac_ux_t = ca.transpose(ca.jacobian(con_h_expr, ca.vertcat(u,x)))
         jac_z_t = ca.jacobian(con_h_expr, z)
@@ -659,10 +681,12 @@ def generate_c_code_constraint( model, con_name, is_terminal, opts ):
         constraint_fun_jac_tran.generate(fun_name, casadi_codegen_opts)
         if opts['generate_hess']:
 
-            if is_terminal:
-                fun_name = con_name + '_constr_h_e_fun_jac_uxt_zt_hess'
+            if stage_type == 'terminal':
+                fun_name = model.name + '_constr_h_e_fun_jac_uxt_zt_hess'
+            elif stage_type == 'initial':
+                fun_name = model.name + '_constr_h_0_fun_jac_uxt_zt_hess'
             else:
-                fun_name = con_name + '_constr_h_fun_jac_uxt_zt_hess'
+                fun_name = model.name + '_constr_h_fun_jac_uxt_zt_hess'
 
             # adjoint
             adj_ux = ca.jtimes(con_h_expr, ca.vertcat(u, x), lam_h, True)
@@ -680,20 +704,26 @@ def generate_c_code_constraint( model, con_name, is_terminal, opts ):
             # generate C code
             constraint_fun_jac_tran_hess.generate(fun_name, casadi_codegen_opts)
 
-        if is_terminal:
-            fun_name = con_name + '_constr_h_e_fun'
+        if stage_type == 'terminal':
+            fun_name = model.name + '_constr_h_e_fun'
+        elif stage_type == 'initial':
+            fun_name = model.name + '_constr_h_0_fun'
         else:
-            fun_name = con_name + '_constr_h_fun'
+            fun_name = model.name + '_constr_h_fun'
         h_fun = ca.Function(fun_name, [x, u, z, p], [con_h_expr])
         h_fun.generate(fun_name, casadi_codegen_opts)
 
     else: # BGP constraint
-        if is_terminal:
-            fun_name = con_name + '_phi_e_constraint'
+        if stage_type == 'terminal':
+            fun_name = model.name + '_phi_e_constraint'
             r = model.con_r_in_phi_e
             con_r_expr = model.con_r_expr_e
-        else:
-            fun_name = con_name + '_phi_constraint'
+        elif stage_type == 'initial':
+            fun_name = model.name + '_phi_0_constraint'
+            r = model.con_r_in_phi_0
+            con_r_expr = model.con_r_expr_0
+        elif stage_type == 'path':
+            fun_name = model.name + '_phi_constraint'
             r = model.con_r_in_phi
             con_r_expr = model.con_r_expr
 

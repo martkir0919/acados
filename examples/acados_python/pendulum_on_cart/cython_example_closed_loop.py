@@ -48,8 +48,8 @@ def main():
     ocp.model = model
 
     Tf = 1.0
-    nx = model.x.size()[0]
-    nu = model.u.size()[0]
+    nx = model.x.rows()
+    nu = model.u.rows()
     ny = nx + nu
     ny_e = nx
     N_horizon = 20
@@ -85,7 +85,6 @@ def main():
     # set constraints
     Fmax = 80
     x0 = np.array([0.0, np.pi, 0.0, 0.0])
-    ocp.constraints.constr_type = 'BGH'
     ocp.constraints.lbu = np.array([-Fmax])
     ocp.constraints.ubu = np.array([+Fmax])
     ocp.constraints.x0 = x0
@@ -123,8 +122,8 @@ def main():
     # create an integrator with the same settings as used in the OCP solver.
     # acados_integrator = AcadosSimSolver(ocp, json_file = solver_json)
     Nsim = 100
-    simX = np.ndarray((Nsim+1, nx))
-    simU = np.ndarray((Nsim, nu))
+    simX = np.zeros((Nsim+1, nx))
+    simU = np.zeros((Nsim, nu))
 
     simX[0,:] = x0
 

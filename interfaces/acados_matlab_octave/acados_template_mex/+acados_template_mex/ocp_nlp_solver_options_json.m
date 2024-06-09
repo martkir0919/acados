@@ -66,9 +66,13 @@ classdef ocp_nlp_solver_options_json < handle
         exact_hess_cost
         exact_hess_constr
         exact_hess_dyn
+        fixed_hess
         ext_cost_num_hess
         alpha_min
         alpha_reduction
+        as_rti_iter
+        as_rti_level
+        rti_log_residuals
         globalization
         collocation_type
         line_search_use_sufficient_descent
@@ -81,6 +85,8 @@ classdef ocp_nlp_solver_options_json < handle
         nlp_solver_ext_qp_res
         ext_fun_compile_flags
         cost_discretization
+        with_solution_sens_wrt_params
+        with_value_sens_wrt_params
 
     end
     methods
@@ -102,7 +108,7 @@ classdef ocp_nlp_solver_options_json < handle
             obj.nlp_solver_step_length = 1.0;
             obj.rti_phase = 0;
             obj.qp_solver_iter_max = [];
-            obj.reg_epsilon = 1e-4
+            obj.reg_epsilon = 1e-4;
             obj.print_level = 0;
             obj.time_steps = [];
             obj.initialize_t_slacks = 0;
@@ -111,6 +117,7 @@ classdef ocp_nlp_solver_options_json < handle
             obj.exact_hess_cost = 1;
             obj.exact_hess_constr = 1;
             obj.exact_hess_dyn = 1;
+            obj.fixed_hess = 0;
             obj.ext_cost_num_hess = 0;
             obj.alpha_min = 0.05;
             obj.alpha_reduction = 0.7;
@@ -125,6 +132,11 @@ classdef ocp_nlp_solver_options_json < handle
             obj.nlp_solver_ext_qp_res = 0;
             obj.ext_fun_compile_flags = '-O2';
             obj.cost_discretization = 'EULER';
+            obj.with_solution_sens_wrt_params = 0;
+            obj.with_value_sens_wrt_params = 0;
+            obj.as_rti_iter = 1;
+            obj.as_rti_level = 4;
+            obj.rti_log_residuals = 0;
 
         end
         function s = struct(self)

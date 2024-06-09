@@ -99,45 +99,45 @@ int {{ model.dyn_impl_dae_fun }}(void **, void **, void *);
 /* GNSF Functions */
 	{% if model.gnsf.purely_linear != 1 %}
 // phi_fun
-int        {{ model.name }}_gnsf_phi_fun(const double** arg, double** res, int* iw, double* w, void *mem);
-int        {{ model.name }}_gnsf_phi_fun_work(int *, int *, int *, int *);
+int {{ model.name }}_gnsf_phi_fun(const double** arg, double** res, int* iw, double* w, void *mem);
+int {{ model.name }}_gnsf_phi_fun_work(int *, int *, int *, int *);
 const int *{{ model.name }}_gnsf_phi_fun_sparsity_in(int);
 const int *{{ model.name }}_gnsf_phi_fun_sparsity_out(int);
-int        {{ model.name }}_gnsf_phi_fun_n_in(void);
-int        {{ model.name }}_gnsf_phi_fun_n_out(void);
+int {{ model.name }}_gnsf_phi_fun_n_in(void);
+int {{ model.name }}_gnsf_phi_fun_n_out(void);
 
 // phi_fun_jac_y
-int        {{ model.name }}_gnsf_phi_fun_jac_y(const double** arg, double** res, int* iw, double* w, void *mem);
-int        {{ model.name }}_gnsf_phi_fun_jac_y_work(int *, int *, int *, int *);
+int {{ model.name }}_gnsf_phi_fun_jac_y(const double** arg, double** res, int* iw, double* w, void *mem);
+int {{ model.name }}_gnsf_phi_fun_jac_y_work(int *, int *, int *, int *);
 const int *{{ model.name }}_gnsf_phi_fun_jac_y_sparsity_in(int);
 const int *{{ model.name }}_gnsf_phi_fun_jac_y_sparsity_out(int);
-int        {{ model.name }}_gnsf_phi_fun_jac_y_n_in(void);
-int        {{ model.name }}_gnsf_phi_fun_jac_y_n_out(void);
+int {{ model.name }}_gnsf_phi_fun_jac_y_n_in(void);
+int {{ model.name }}_gnsf_phi_fun_jac_y_n_out(void);
 
 // phi_jac_y_uhat
-int        {{ model.name }}_gnsf_phi_jac_y_uhat(const double** arg, double** res, int* iw, double* w, void *mem);
-int        {{ model.name }}_gnsf_phi_jac_y_uhat_work(int *, int *, int *, int *);
+int {{ model.name }}_gnsf_phi_jac_y_uhat(const double** arg, double** res, int* iw, double* w, void *mem);
+int {{ model.name }}_gnsf_phi_jac_y_uhat_work(int *, int *, int *, int *);
 const int *{{ model.name }}_gnsf_phi_jac_y_uhat_sparsity_in(int);
 const int *{{ model.name }}_gnsf_phi_jac_y_uhat_sparsity_out(int);
-int        {{ model.name }}_gnsf_phi_jac_y_uhat_n_in(void);
-int        {{ model.name }}_gnsf_phi_jac_y_uhat_n_out(void);
+int {{ model.name }}_gnsf_phi_jac_y_uhat_n_in(void);
+int {{ model.name }}_gnsf_phi_jac_y_uhat_n_out(void);
 	{% if model.gnsf.nontrivial_f_LO == 1 %}
 // f_lo_fun_jac_x1k1uz
-int        {{ model.name }}_gnsf_f_lo_fun_jac_x1k1uz(const double** arg, double** res, int* iw, double* w, void *mem);
-int        {{ model.name }}_gnsf_f_lo_fun_jac_x1k1uz_work(int *, int *, int *, int *);
+int {{ model.name }}_gnsf_f_lo_fun_jac_x1k1uz(const double** arg, double** res, int* iw, double* w, void *mem);
+int {{ model.name }}_gnsf_f_lo_fun_jac_x1k1uz_work(int *, int *, int *, int *);
 const int *{{ model.name }}_gnsf_f_lo_fun_jac_x1k1uz_sparsity_in(int);
 const int *{{ model.name }}_gnsf_f_lo_fun_jac_x1k1uz_sparsity_out(int);
-int        {{ model.name }}_gnsf_f_lo_fun_jac_x1k1uz_n_in(void);
-int        {{ model.name }}_gnsf_f_lo_fun_jac_x1k1uz_n_out(void);
+int {{ model.name }}_gnsf_f_lo_fun_jac_x1k1uz_n_in(void);
+int {{ model.name }}_gnsf_f_lo_fun_jac_x1k1uz_n_out(void);
 	{%- endif %}
 	{%- endif %}
 // used to import model matrices
-int        {{ model.name }}_gnsf_get_matrices_fun(const double** arg, double** res, int* iw, double* w, void *mem);
-int        {{ model.name }}_gnsf_get_matrices_fun_work(int *, int *, int *, int *);
+int {{ model.name }}_gnsf_get_matrices_fun(const double** arg, double** res, int* iw, double* w, void *mem);
+int {{ model.name }}_gnsf_get_matrices_fun_work(int *, int *, int *, int *);
 const int *{{ model.name }}_gnsf_get_matrices_fun_sparsity_in(int);
 const int *{{ model.name }}_gnsf_get_matrices_fun_sparsity_out(int);
-int        {{ model.name }}_gnsf_get_matrices_fun_n_in(void);
-int        {{ model.name }}_gnsf_get_matrices_fun_n_out(void);
+int {{ model.name }}_gnsf_get_matrices_fun_n_in(void);
+int {{ model.name }}_gnsf_get_matrices_fun_n_out(void);
 
 {% elif solver_options.integrator_type == "ERK" %}
 /* explicit ODE */
@@ -192,6 +192,24 @@ const int *{{ model.name }}_dyn_disc_phi_fun_jac_sparsity_out(int);
 int {{ model.name }}_dyn_disc_phi_fun_jac_n_in(void);
 int {{ model.name }}_dyn_disc_phi_fun_jac_n_out(void);
 
+{% if solver_options.with_solution_sens_wrt_params %}
+int {{ model.name }}_dyn_disc_phi_jac_p_hess_xu_p(const real_t** arg, real_t** res, int* iw, real_t* w, void *mem);
+int {{ model.name }}_dyn_disc_phi_jac_p_hess_xu_p_work(int *, int *, int *, int *);
+const int *{{ model.name }}_dyn_disc_phi_jac_p_hess_xu_p_sparsity_in(int);
+const int *{{ model.name }}_dyn_disc_phi_jac_p_hess_xu_p_sparsity_out(int);
+int {{ model.name }}_dyn_disc_phi_jac_p_hess_xu_p_n_in(void);
+int {{ model.name }}_dyn_disc_phi_jac_p_hess_xu_p_n_out(void);
+{% endif %}
+
+{% if solver_options.with_value_sens_wrt_params %}
+int {{ model.name }}_dyn_disc_phi_adj_p(const real_t** arg, real_t** res, int* iw, real_t* w, void *mem);
+int {{ model.name }}_dyn_disc_phi_adj_p_work(int *, int *, int *, int *);
+const int *{{ model.name }}_dyn_disc_phi_adj_p_sparsity_in(int);
+const int *{{ model.name }}_dyn_disc_phi_adj_p_sparsity_out(int);
+int {{ model.name }}_dyn_disc_phi_adj_p_n_in(void);
+int {{ model.name }}_dyn_disc_phi_adj_p_n_out(void);
+{% endif %}
+
 {%- if hessian_approx == "EXACT" %}
 int {{ model.name }}_dyn_disc_phi_fun_jac_hess(const real_t** arg, real_t** res, int* iw, real_t* w, void *mem);
 int {{ model.name }}_dyn_disc_phi_fun_jac_hess_work(int *, int *, int *, int *);
@@ -205,6 +223,9 @@ int {{ model.name }}_dyn_disc_phi_fun_jac_hess_n_out(void);
 int {{ model.dyn_disc_fun_jac_hess }}(void **, void **, void *);
   {% endif %}
 int {{ model.dyn_disc_fun_jac }}(void **, void **, void *);
+{% if solver_options.with_solution_sens_wrt_params %}
+int {{ model.dyn_disc_params_jac }}(void **, void **, void *);
+{% endif %}
 int {{ model.dyn_disc_fun }}(void **, void **, void *);
 {% endif %}
 

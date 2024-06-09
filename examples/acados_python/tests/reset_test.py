@@ -50,8 +50,8 @@ def main(cost_type='NONLINEAR_LS', hessian_approximation='EXACT', ext_cost_use_n
     ocp.model = model
 
     Tf = 1.0
-    nx = model.x.size()[0]
-    nu = model.u.size()[0]
+    nx = model.x.rows()
+    nu = model.u.rows()
     ny = nx + nu
     ny_e = nx
     N = 20
@@ -105,7 +105,6 @@ def main(cost_type='NONLINEAR_LS', hessian_approximation='EXACT', ext_cost_use_n
 
     # set constraints
     Fmax = 80
-    ocp.constraints.constr_type = 'BGH'
     ocp.constraints.lbu = np.array([-Fmax])
     ocp.constraints.ubu = np.array([+Fmax])
     x0 = np.array([0.0, np.pi, 0.0, 0.0])
@@ -155,8 +154,8 @@ def main(cost_type='NONLINEAR_LS', hessian_approximation='EXACT', ext_cost_use_n
                 ocp_solver.cost_set(i, "ext_cost_num_hess", np.diag([0.04, 4000, 4000, 0.04, 0.04, ]))
             ocp_solver.cost_set(N, "ext_cost_num_hess", np.diag([4000, 4000, 0.04, 0.04, ]))
 
-    simX = np.ndarray((N+1, nx))
-    simU = np.ndarray((N, nu))
+    simX = np.zeros((N+1, nx))
+    simU = np.zeros((N, nu))
 
     status = ocp_solver.solve()
 

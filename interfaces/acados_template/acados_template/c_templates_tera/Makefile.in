@@ -48,6 +48,12 @@
 	{%- set constr_type = "NONE" %}
 {%- endif %}
 
+{%- if constraints.constr_type_0 %}
+	{%- set constr_type_0 = constraints.constr_type_0 %}
+{%- else %}
+	{%- set constr_type_0 = "NONE" %}
+{%- endif %}
+
 {%- if constraints.constr_type_e %}
 	{%- set constr_type_e = constraints.constr_type_e %}
 {%- else %}
@@ -84,6 +90,19 @@
 	{%- set dims_nphi = 0 %}
 {%- endif %}
 
+{%- if dims.nphi_0 %}
+	{%- set dims_nphi_0 = dims.nphi_0 %}
+{%- else %}
+	{%- set dims_nphi_0 = 0 %}
+{%- endif %}
+
+{%- if dims.nh_0 %}
+	{%- set dims_nh_0 = dims.nh_0 %}
+{%- else %}
+	{%- set dims_nh_0 = 0 %}
+{%- endif %}
+
+
 {%- if dims.nh_e %}
 	{%- set dims_nh_e = dims.nh_e %}
 {%- else %}
@@ -111,7 +130,7 @@
 
 {# acados linking libraries and flags #}
 {%- if acados_link_libs and os and os == "pc" %}
-	{%- set link_libs = acados_link_libs.qpoases ~ " " ~ acados_link_libs.hpmpc ~ " " ~ acados_link_libs.osqp -%}
+	{%- set link_libs = acados_link_libs.qpoases ~ " " ~ acados_link_libs.hpmpc ~ " " ~ acados_link_libs.osqp ~ " " ~ acados_link_libs.daqp -%}
 	{%- set openmp_flag = acados_link_libs.openmp %}
 {%- else %}
 	{%- set openmp_flag = " " %}
@@ -162,6 +181,12 @@ MODEL_SRC+= {{ model.name }}_model/{{ model.name }}_gnsf_get_matrices_fun.c
 {%- elif solver_options.integrator_type == "DISCRETE" %}
 MODEL_SRC+= {{ model.name }}_model/{{ model.name }}_dyn_disc_phi_fun.c
 MODEL_SRC+= {{ model.name }}_model/{{ model.name }}_dyn_disc_phi_fun_jac.c
+{% if solver_options.with_solution_sens_wrt_params %}
+MODEL_SRC+= {{ model.name }}_model/{{ model.name }}_dyn_disc_phi_jac_p_hess_xu_p.c
+{% endif %}
+{% if solver_options.with_value_sens_wrt_params %}
+MODEL_SRC+= {{ model.name }}_model/{{ model.name }}_dyn_disc_phi_adj_p.c
+{% endif %}
 		{%- if hessian_approx == "EXACT" %}
 MODEL_SRC+= {{ model.name }}_model/{{ model.name }}_dyn_disc_phi_fun_jac_hess.c
 		{%- endif %}
@@ -173,11 +198,15 @@ MODEL_OBJ := $(MODEL_SRC:.c=.o)
 
 # optimal control problem - mostly CasADi exports
 OCP_SRC=
-{%- if constr_type == "BGP" and dims_nphi > 0 %}
-OCP_SRC+= {{ model.name }}_constraints/{{ model.name }}_phi_constraint.c
-{%- endif %}
-{%- if constr_type_e == "BGP" and dims_nphi_e > 0 %}
-OCP_SRC+= {{ model.name }}_constraints/{{ model.name }}_phi_e_constraint.c
+
+{%- if constr_type_0 == "BGH" and dims_nh_0 > 0 %}
+OCP_SRC+= {{ model.name }}_constraints/{{ model.name }}_constr_h_0_fun_jac_uxt_zt.c
+OCP_SRC+= {{ model.name }}_constraints/{{ model.name }}_constr_h_0_fun.c
+	{%- if hessian_approx == "EXACT" %}
+OCP_SRC+= {{ model.name }}_constraints/{{ model.name }}_constr_h_0_fun_jac_uxt_zt_hess.c
+	{%- endif %}
+{%- elif constr_type_0 == "BGP" and dims_nphi_0 > 0 %}
+OCP_SRC+= {{ model.name }}_constraints/{{ model.name }}_phi_0_constraint.c
 {%- endif %}
 
 {%- if constr_type == "BGH" and dims_nh > 0 %}
@@ -186,6 +215,8 @@ OCP_SRC+= {{ model.name }}_constraints/{{ model.name }}_constr_h_fun.c
 	{%- if hessian_approx == "EXACT" %}
 OCP_SRC+= {{ model.name }}_constraints/{{ model.name }}_constr_h_fun_jac_uxt_zt_hess.c
 	{%- endif %}
+{%- elif constr_type == "BGP" and dims_nphi > 0 %}
+OCP_SRC+= {{ model.name }}_constraints/{{ model.name }}_phi_constraint.c
 {%- endif %}
 
 {%- if constr_type_e == "BGH" and dims_nh_e > 0 %}
@@ -194,6 +225,8 @@ OCP_SRC+= {{ model.name }}_constraints/{{ model.name }}_constr_h_e_fun.c
 	{%- if hessian_approx == "EXACT" %}
 OCP_SRC+= {{ model.name }}_constraints/{{ model.name }}_constr_h_e_fun_jac_uxt_zt_hess.c
 	{%- endif %}
+{%- elif constr_type_e == "BGP" and dims_nphi_e > 0 %}
+OCP_SRC+= {{ model.name }}_constraints/{{ model.name }}_phi_e_constraint.c
 {%- endif %}
 
 {%- if cost_type_0 == "NONLINEAR_LS" %}
@@ -208,6 +241,12 @@ OCP_SRC+= {{ model.name }}_cost/{{ model.name }}_conl_cost_0_fun_jac_hess.c
 OCP_SRC+= {{ model.name }}_cost/{{ model.name }}_cost_ext_cost_0_fun.c
 OCP_SRC+= {{ model.name }}_cost/{{ model.name }}_cost_ext_cost_0_fun_jac.c
 OCP_SRC+= {{ model.name }}_cost/{{ model.name }}_cost_ext_cost_0_fun_jac_hess.c
+{% if solver_options.with_solution_sens_wrt_params %}
+OCP_SRC+= {{ model.name }}_cost/{{ model.name }}_cost_ext_cost_0_hess_xu_p.c
+{% endif %}
+{% if solver_options.with_value_sens_wrt_params %}
+OCP_SRC+= {{ model.name }}_cost/{{ model.name }}_cost_ext_cost_0_grad_p.c
+{% endif %}
 	{%- else %}
 OCP_SRC+= {{ model.name }}_cost/{{ cost.cost_source_ext_cost_0 }}
 	{%- endif %}
@@ -224,6 +263,12 @@ OCP_SRC+= {{ model.name }}_cost/{{ model.name }}_conl_cost_fun_jac_hess.c
 OCP_SRC+= {{ model.name }}_cost/{{ model.name }}_cost_ext_cost_fun.c
 OCP_SRC+= {{ model.name }}_cost/{{ model.name }}_cost_ext_cost_fun_jac.c
 OCP_SRC+= {{ model.name }}_cost/{{ model.name }}_cost_ext_cost_fun_jac_hess.c
+{% if solver_options.with_solution_sens_wrt_params %}
+OCP_SRC+= {{ model.name }}_cost/{{ model.name }}_cost_ext_cost_hess_xu_p.c
+{% endif %}
+{% if solver_options.with_value_sens_wrt_params %}
+OCP_SRC+= {{ model.name }}_cost/{{ model.name }}_cost_ext_cost_grad_p.c
+{% endif %}
 	{%- elif cost.cost_source_ext_cost != cost.cost_source_ext_cost_0 %}
 OCP_SRC+= {{ model.name }}_cost/{{ cost.cost_source_ext_cost }}
 	{%- endif %}
@@ -240,6 +285,12 @@ OCP_SRC+= {{ model.name }}_cost/{{ model.name }}_conl_cost_e_fun_jac_hess.c
 OCP_SRC+= {{ model.name }}_cost/{{ model.name }}_cost_ext_cost_e_fun.c
 OCP_SRC+= {{ model.name }}_cost/{{ model.name }}_cost_ext_cost_e_fun_jac.c
 OCP_SRC+= {{ model.name }}_cost/{{ model.name }}_cost_ext_cost_e_fun_jac_hess.c
+{% if solver_options.with_solution_sens_wrt_params %}
+OCP_SRC+= {{ model.name }}_cost/{{ model.name }}_cost_ext_cost_e_hess_xu_p.c
+{% endif %}
+{% if solver_options.with_value_sens_wrt_params %}
+OCP_SRC+= {{ model.name }}_cost/{{ model.name }}_cost_ext_cost_e_grad_p.c
+{% endif %}
 	{%- elif cost.cost_source_ext_cost_e != cost.cost_source_ext_cost_0 %}
 OCP_SRC+= {{ model.name }}_cost/{{ cost.cost_source_ext_cost_e }}
 	{%- endif %}
